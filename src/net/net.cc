@@ -25,6 +25,7 @@
 //#include "net/tanh-layer.h"
 #include "net/softmax-layer.h"
 #include "net/affine-trans-layer.h"
+#include "net/cond-layer.h"
 #include "net/utils-functions.h"
 #include "util/text-utils.h"
 
@@ -85,7 +86,56 @@ void Net::Propagate(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out)
   (*out) = propagate_buf_[layers_.size()];
 }
 
+void Net::PropagateCond(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &cond, CuMatrix<BaseFloat> *out) {
+  KALDI_ASSERT(NULL != out);
+
+  if (NumLayers() == 0) {
+    (*out) = in; // copy 
+    return;
+  }
+
+	// we need at least L+1 input buffers
+	KALDI_ASSERT((int32)propagate_buf_.size() >= NumLayers()+1);
+	
+	KALDI_LOG << "A";
+
+	// TODO for now we are assuming that the conditional layer will always be the first
+	propagate_buf_[0].Resize(cond.NumRows(), cond.NumCols());
+  propagate_buf_[0].CopyFromMat(cond);
+
+	CuMatrix<BaseFloat> cond_mat_buff(cond.NumRows(), layers_[0]->OutputDim(), kSetZero);
+
+	layers_[0]->Propagate(propagate_buf_[0], &cond_mat_buff);
+	
+	propagate_buf_[1].Resize(in.NumRows(), in.NumCols() + GetConditionOutDim());
+  propagate_buf_[1].ColRange(0, in.NumCols()).CopyFromMat(in);
+	propagate_buf_[1].ColRange(in.NumCols(), GetConditionOutDim()).CopyFromMat(cond_mat_buff);
+
+  for(int32 i=1; i<(int32)layers_.size() - 1; i++) {
+		// we need to append the conditional output to every input to the layers
+
+		CuMatrix<BaseFloat> tmp_buff;
+		
+    layers_[i]->Propagate(propagate_buf_[i], &tmp_buff);
+		if (i == (int32)layers_.size() - 2)
+			propagate_buf_[i+1].Resize(in.NumRows(), layers_[i]->OutputDim());
+		else
+			propagate_buf_[i+1].Resize(in.NumRows(), layers_[i]->OutputDim() + GetConditionOutDim());
+
+		propagate_buf_[i+1].ColRange(0, layers_[i]->OutputDim()).CopyFromMat(tmp_buff);
+		if (i < (int32)layers_.size() - 2)
+			propagate_buf_[i+1].ColRange(layers_[i]->OutputDim(), GetConditionOutDim()).CopyFromMat(cond_mat_buff);
+  }
+	KALDI_LOG << "K POP ";
+	layers_[layers_.size() - 1]->Propagate(propagate_buf_[layers_.size() - 1], &propagate_buf_[layers_.size()]);
+	KALDI_LOG << "L";
+  (*out) = propagate_buf_[layers_.size()];
+}
+
+
 void Net::Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff) {
+		//KALDI_LOG << layers_.size();
+		//KALDI_LOG << layers_.front();
 
   if (NumLayers() == 0) { (*in_diff) = out_diff; return; }
 
@@ -106,6 +156,39 @@ void Net::Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFl
   // eventually export the derivative
   if (NULL != in_diff) (*in_diff) = backpropagate_buf_[0];
 }
+
+
+void Net::BackpropagateCond(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff) {
+
+  if (NumLayers() == 0) { (*in_diff) = out_diff; return; }
+
+  KALDI_ASSERT((int32)propagate_buf_.size() == NumLayers()+1);
+  KALDI_ASSERT((int32)backpropagate_buf_.size() == NumLayers()+1);
+
+	// copy out_diff to last buffer
+	backpropagate_buf_[NumLayers()] = out_diff;
+	// backpropagate using buffers
+	
+	int lastLayerToTrain = 0;
+	
+	if(IsConditioning())
+		lastLayerToTrain = 1;
+
+	for (int32 i = NumLayers()-1; i >= lastLayerToTrain; i--) {
+    layers_[i]->Backpropagate(propagate_buf_[i], propagate_buf_[i+1],
+                              backpropagate_buf_[i+1], &backpropagate_buf_[i]);
+    if (layers_[i]->IsTrainable()) {
+      TrainableLayer *tl = dynamic_cast<TrainableLayer*>(layers_[i]);
+      tl->Update(propagate_buf_[i], backpropagate_buf_[i+1]);
+    }
+  }
+	// eventually export the derivative
+	if (NULL != in_diff) (*in_diff) = backpropagate_buf_[0];
+}
+
+
+
+
 
 void Net::Feedforward(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out) {
   KALDI_ASSERT(NULL != out);
@@ -137,6 +220,40 @@ void Net::Feedforward(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *ou
 }
 
 
+void Net::FeedforwardCond(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &cond,  CuMatrix<BaseFloat> *out) {
+  KALDI_ASSERT(NULL != out);
+
+  if (NumLayers() == 0) {
+    out->Resize(in.NumRows(), in.NumCols());
+    out->CopyFromMat(in);
+    return;
+  }
+
+  if (NumLayers() == 1) {
+    layers_[0]->Propagate(in, out);
+    return;
+  }
+
+	// we need at least 2 input buffers
+	KALDI_ASSERT(propagate_buf_.size() >= 2);
+
+	// propagate by using exactly 2 auxiliary buffers
+	int32 L = 0;
+  layers_[L]->Propagate(in, &propagate_buf_[L%2]);
+  for(L++; L<=NumLayers()-2; L++) {
+    layers_[L]->Propagate(propagate_buf_[(L-1)%2], &propagate_buf_[L%2]);
+  }
+  layers_[L]->Propagate(propagate_buf_[(L-1)%2], out);
+
+	// release the buffers we don't need anymore
+	propagate_buf_[0].Resize(0,0);
+  propagate_buf_[1].Resize(0,0);
+}
+
+
+
+
+
 int32 Net::OutputDim() const {
   KALDI_ASSERT(!layers_.empty());
   return layers_.back()->OutputDim();
@@ -144,8 +261,32 @@ int32 Net::OutputDim() const {
 
 int32 Net::InputDim() const {
   KALDI_ASSERT(!layers_.empty());
-  return layers_.front()->InputDim();
+	if(IsConditioning()) // in case when we are conditioning
+		return layers_[1]->InputDim() - GetConditionOutDim();
+	else
+	  return layers_.front()->InputDim();
 }
+
+int Net::GetConditionInDim() const {
+	if(IsConditioning())
+		return dynamic_cast<AffineTransformCond*> (layers_.front())->InputDim();
+	else
+		return -1;
+}
+
+int Net::GetConditionOutDim() const {
+  if(IsConditioning())
+    return dynamic_cast<AffineTransformCond*> (layers_.front())->OutputDim();
+  else
+    return -1;
+}
+
+bool Net::IsConditioning() const {
+	if(dynamic_cast<AffineTransformCond*> (layers_.front()))
+		return true;
+	return false;
+}
+
 
 const Layer& Net::GetLayer(int32 layer) const {
   KALDI_ASSERT(static_cast<size_t>(layer) < layers_.size());
@@ -259,7 +400,7 @@ void Net::Read(std::istream &is, bool binary) {
 	KALDI_LOG << "READING THE NETWORK";
   while (NULL != (layer = Layer::Read(is, binary))) {
     if (NumLayers() > 0 && layers_.back()->OutputDim() != layer->InputDim()) {
-      KALDI_ERR << "Dimensionality mismatch!"
+      KALDI_WARN << "Dimensionality mismatch!"
                 << " Previous layer output:" << layers_.back()->OutputDim()
                 << " Current layer input:" << layer->InputDim();
 		}	
@@ -387,13 +528,26 @@ void Net::Check() const {
   // check we have correct number of buffers,
   KALDI_ASSERT(propagate_buf_.size() == NumLayers()+1)
   KALDI_ASSERT(backpropagate_buf_.size() == NumLayers()+1)
+	size_t i = 0;
+	
+	if(IsConditioning()){
+		i = 1; // ignore the first layer, when conditioning	
+		for (; i + 1 < layers_.size() - 1; i++) {
+			KALDI_ASSERT(layers_[i] != NULL);
+			int32 output_dim = layers_[i]->OutputDim(),
+				next_input_dim = layers_[i+1]->InputDim();
+			KALDI_ASSERT(output_dim + GetConditionOutDim() == next_input_dim);
+	  }
+	}
+	else {
   // check dims,
-  for (size_t i = 0; i + 1 < layers_.size(); i++) {
-    KALDI_ASSERT(layers_[i] != NULL);
-    int32 output_dim = layers_[i]->OutputDim(),
-      next_input_dim = layers_[i+1]->InputDim();
-    KALDI_ASSERT(output_dim == next_input_dim);
-  }
+	  for (; i + 1 < layers_.size(); i++) {
+			KALDI_ASSERT(layers_[i] != NULL);
+			int32 output_dim = layers_[i]->OutputDim(),
+				next_input_dim = layers_[i+1]->InputDim();
+			KALDI_ASSERT(output_dim == next_input_dim);
+		}
+	}
   // check for nan/inf in network weights,
   Vector<BaseFloat> weights;
   GetParams(&weights);

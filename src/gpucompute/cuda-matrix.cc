@@ -29,6 +29,7 @@
 #include <cublas.h>
 #endif
 
+
 #include "base/timer.h"
 #include "gpucompute/cuda-common.h"
 #include "gpucompute/cuda-vector.h"
@@ -42,6 +43,168 @@
 
 namespace eesen {
 
+
+template<typename Real>
+Real TraceMatMat(const CuMatrixBase<Real> &A,
+                 const CuMatrixBase<Real> &B,
+                 MatrixTransposeType trans) {
+  if (A.num_rows_ == 0) {
+    KALDI_ASSERT(B.num_rows_ == 0);
+    return 0.0;
+  }
+  Real result = 0;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    if (trans == kNoTrans) {
+      KALDI_ASSERT(A.NumRows() == B.NumCols() && A.NumCols() == B.NumRows());
+    } else {
+      KALDI_ASSERT(A.NumRows() == B.NumRows() && A.NumCols() == B.NumCols());
+    }
+    if (A.NumRows() * A.NumCols() > 16384) {
+			// This version in which we don't use a special-purpose kernel, but
+			// do AddDiagMat on a temporary vector and returns its sum, seems to be
+			// faster for larger matrices.  The cutoff is approximate and
+			// we only looked at the time on square matrices, which
+			// is what we test in cu-matrix-speed-test.cc.
+			CuVector<Real> sum_vec(A.NumRows());
+      sum_vec.AddDiagMatMat(1.0, A, kNoTrans,
+                            B, trans, 0.0);
+      return sum_vec.Sum();
+    } else {
+      Timer tim;
+		 // the sizes of result_vec must match what we
+		 //	call the kernels with, in cu-kernels.cu
+		 CuVector<Real> result_vec(trans == kTrans ? 4 : 2, kUndefined);
+      if (trans == kNoTrans) {
+        cuda_trace_mat_mat(A.Data(), B.Data(), A.Dim(), B.Stride(), result_vec.Data());
+      } else {
+        cuda_trace_mat_mat_trans(A.Data(), B.Data(), A.Dim(), B.Stride(), result_vec.Data());
+      }
+      CU_SAFE_CALL(cudaGetLastError());
+      Vector<Real> result_cpu(result_vec); // copying from CUDA faster than summing in CUDA.
+      result = result_cpu.Sum();
+      CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+    }
+  } else
+#endif
+  {
+    result = TraceMatMat(A.Mat(), B.Mat(), trans);
+  }
+  return result;
+}
+
+
+template
+float TraceMatMat(const CuMatrixBase<float> &A,
+                  const CuMatrixBase<float> &B,
+                  MatrixTransposeType trans);
+template
+double TraceMatMat(const CuMatrixBase<double> &A,
+                   const CuMatrixBase<double> &B,
+                   MatrixTransposeType trans);
+
+
+template<typename Real>
+void CuMatrixBase<Real>::AddToDiag(Real value) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    if (num_rows_ == 0) return;
+    Timer tim;
+		// We'll create a fake matrix with "num_diag" rows, one
+		// columnn, and a stride of "this_stride".  The y-value of
+		// the grid/blocks corresponds to the row, in this kernel.
+		MatrixIndexT num_diag = std::min(num_rows_, num_cols_),
+        this_stride = stride_ + 1;
+    dim3 dimBlock(1, CU1DBLOCK);
+    dim3 dimGrid(1, n_blocks(num_diag, CU1DBLOCK));
+    ::MatrixDim d = { num_diag, 1, this_stride };
+    cuda_add(dimGrid, dimBlock, data_, value, d);
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+  #endif
+  {
+    Mat().AddToDiag(value);
+  }
+}
+/*
+template<typename Real>
+void CuMatrixBase<Real>::SymAddMat2(
+    Real alpha, const CuMatrixBase<Real> &A, MatrixTransposeType transA,
+    Real beta) {
+  KALDI_ASSERT(num_rows_ == num_cols_ &&
+               ((transA == kNoTrans && A.num_rows_ == num_rows_) ||
+                (transA == kTrans && A.num_cols_ == num_cols_)));
+  if (num_rows_ == 0) return;
+  KALDI_ASSERT(A.data_ != data_);
+
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    cublasOperation_t trans = (transA == kTrans ? CUBLAS_OP_N : CUBLAS_OP_T);
+    MatrixIndexT A_other_dim = (transA == kNoTrans ? A.num_cols_ : A.num_rows_);
+    CU_SAFE_CALL(cublas_syrk(CUBLAS_FILL_MODE_UPPER, trans,
+			    num_rows_, A_other_dim, alpha, A.Data(),
+			    A.Stride(), beta, this->data_, this->stride_));
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().SymAddMat2(alpha, A.Mat(), transA, beta);
+  }
+}
+
+template<typename Real>
+void CuMatrixBase<Real>::CopyLowerToUpper() {
+  KALDI_ASSERT(num_cols_ == num_rows_);
+  if (num_rows_ == 0) return;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    int32 dim = this->num_rows_;
+    dim3 dimGrid(n_blocks(dim, CU2DBLOCK),
+                 n_blocks(dim, CU2DBLOCK));
+    cuda_copy_low_upp(dimGrid, dimBlock, data_, Dim());
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().CopyLowerToUpper();
+  }
+}
+
+template<typename Real>
+void CuMatrixBase<Real>::SymInvertPosDef() {
+  KALDI_ASSERT(num_rows_ == num_cols_);
+  if (num_rows_ == 0) return;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    CuMatrix<Real> inv_cholesky(num_rows_, num_rows_);
+    this->Cholesky(&inv_cholesky);
+		// note: SymAddMat2 only updates lower part of *this.
+		this->SymAddMat2(1.0, inv_cholesky, kTrans, 0.0);
+    this->CopyLowerToUpper();
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  { 
+
+    SpMatrix<Real> temp_sp(this->Mat(), kTakeLower);
+    TpMatrix<Real> C(temp_sp.NumRows(), kUndefined);
+    C.Cholesky(temp_sp);
+    C.Invert();
+    temp_sp.AddTp2(1.0, C, kTrans, 0.0);
+    this->Mat().CopyFromSp(temp_sp);
+		// was previously just: CuSpMatrix::Invert().
+		
+	}
+}
+*/
 template<typename Real>
 void CuMatrix<Real>::Resize(MatrixIndexT rows, MatrixIndexT cols,
                             MatrixResizeType resize_type) {

@@ -24,6 +24,7 @@
 #include "net/sigmoid-layer.h"
 #include "net/tanh-layer.h"
 #include "net/affine-trans-layer.h"
+#include "net/cond-layer.h"
 #include "net/utils-functions.h"
 #include "net/bilstm-layer.h"
 #include "net/bilstm-parallel-layer.h"
@@ -36,6 +37,7 @@ namespace eesen {
 
 const struct Layer::key_value Layer::kMarkerMap[] = {
   { Layer::l_Affine_Transform,"<AffineTransform>" },
+	{ Layer::l_Affine_Transform_Cond,"<AffineTransformCond>" },
   { Layer::l_BiLstm,"<BiLstm>"},
   { Layer::l_BiLstm_Parallel,"<BiLstmParallel>"},
   { Layer::l_Lstm,"<Lstm>"},
@@ -77,6 +79,9 @@ Layer* Layer::NewLayerOfType(LayerType layer_type,
   switch (layer_type) {
     case Layer::l_Affine_Transform :
       layer = new AffineTransform(input_dim, output_dim); 
+     break;
+		case Layer::l_Affine_Transform_Cond :
+      layer = new AffineTransformCond(input_dim, output_dim);
       break;
     case Layer::l_BiLstm :
       layer = new BiLstm(input_dim, output_dim);
@@ -117,6 +122,7 @@ Layer* Layer::Init(const std::string &conf_line) {
   // initialize layer
   ReadToken(is, false, &layer_type_string);
   LayerType layer_type = MarkerToType(layer_type_string);
+	KALDI_LOG << layer_type;
   ExpectToken(is, false, "<InputDim>");
   ReadBasicType(is, false, &input_dim);
 

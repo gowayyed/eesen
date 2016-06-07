@@ -242,6 +242,7 @@ void Ctc::ErrorRate(const CuMatrixBase<BaseFloat> &net_out, const std::vector<in
   *hyp = hyp_seq;
 
   int32 err, ins, del, sub;
+	//KALDI_LOG << "HYP IS > " << hyp_seq;
   err =  LevenshteinEditDistance(label, hyp_seq, &ins, &del, &sub);
   *err_rate = (100.0 * err) / label.size();
   error_num_ += err;

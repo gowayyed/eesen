@@ -2,8 +2,9 @@
 
 . ./cmd.sh ## You'll want to change cmd.sh to something that will work on your system.
            ## This relates to the queue.
+. ./path.sh
 
-stage=1
+stage=3
 wsj0=/path/to/LDC93S6B
 wsj1=/path/to/LDC94S13B
 
@@ -51,7 +52,6 @@ if [ $stage -le 2 ]; then
   done
 fi
 
-exit 0
 
 if [ $stage -le 3 ]; then
   echo =====================================================================
@@ -77,8 +77,8 @@ if [ $stage -le 3 ]; then
   utils/prep_ctc_trans.py data/lang_phn/lexicon_numbers.txt data/train_cv05/text "<UNK>" | gzip -c - > $dir/labels.cv.gz
 
   # Train the network with CTC. Refer to the script for details about the arguments
-  steps/train_ctc_parallel.sh --add-deltas true --num-sequence 10 --frame-num-limit 25000 \
-    --learn-rate 0.00004 --report-step 1000 \
+  steps/train_ctc_parallel_h.sh --add-deltas true --num-sequence 10 --frame-num-limit 25000 \
+    --learn-rate 0.00004 --report-step 1000 --nj 3 \
     data/train_tr95 data/train_cv05 $dir || exit 1;
 
   echo =====================================================================

@@ -198,6 +198,11 @@ public:
         CuSubMatrix<BaseFloat> YH(propagate_buf_fw_.ColRange(5 * cell_dim_, cell_dim_));
         CuSubMatrix<BaseFloat> YM(propagate_buf_fw_.ColRange(6 * cell_dim_, cell_dim_));
 
+
+
+				// truncate this: backpropagate_buf_fw_
+
+
         // errors back-propagated to individual gates/units
         CuSubMatrix<BaseFloat> DG(backpropagate_buf_fw_.ColRange(0, cell_dim_));
         CuSubMatrix<BaseFloat> DI(backpropagate_buf_fw_.ColRange(1 * cell_dim_, cell_dim_));
@@ -302,6 +307,10 @@ public:
         // the second half of the error vector corresponds to the backward layer
         DM.RowRange(1*S, T*S).CopyFromMat(out_diff.ColRange(cell_dim_, cell_dim_));
 
+
+				DGIFO.ApplyCeiling(1.0);
+        DGIFO.ApplyFloor(-1.0);
+
         for (int t = 1; t <= T; t++) {
           // variables representing activations of invidivual units/gates
           CuSubMatrix<BaseFloat> y_g(YG.RowRange(t*S, S));
@@ -355,6 +364,11 @@ public:
 //              d_all.Row(s).SetZero();
 //          }
         }  // end of t
+
+//				DGIFO.ApplyCeiling(1.0);
+//				DGIFO.ApplyFloor(-1.0);
+
+				//DGIFO.Set(0);
 
         // errors back-propagated to the inputs
         in_diff->AddMatMat(1.0, DGIFO.RowRange(1*S,T*S), kNoTrans, wei_gifo_x_bw_, kNoTrans, 1.0);

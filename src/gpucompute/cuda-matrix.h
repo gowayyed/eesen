@@ -37,6 +37,12 @@
 namespace eesen {
 
 template<typename Real>
+Real TraceMatMat(const CuMatrixBase<Real> &A, const CuMatrixBase<Real> &B,
+                 MatrixTransposeType trans = kNoTrans);
+
+
+
+template<typename Real>
 class CuMatrixBase {
  public:
   friend class CuMatrixBase<float>;
@@ -59,6 +65,28 @@ class CuMatrixBase {
   friend void cu::Randomize<Real>(const CuMatrixBase<Real> &src,
                                   const CuArray<int32> &copy_from_idx,
                                   CuMatrixBase<Real> *tgt);
+
+	friend Real TraceMatMat<Real>(const CuMatrixBase<Real> &A,
+                                const CuMatrixBase<Real> &B,
+                                MatrixTransposeType trans);
+
+	
+  // Adds "value" to the diagonal elements of the matrix.  The matrix
+  // *this does not have to be square.
+  void AddToDiag(Real value);
+
+/// *this = beta * *this + alpha * M M^T, for symmetric matrices.  It only
+/// updates the lower triangle of *this.  It will leave the matrix asymmetric;
+/// if you need it symmetric as a regular matrix, do CopyLowerToUpper().
+  void SymAddMat2(const Real alpha, const CuMatrixBase<Real> &M,
+                   MatrixTransposeType transA, Real beta);	
+
+	void CopyLowerToUpper();
+
+	/// Inversion for positive definite symmetric matrices.
+	/// Treats the input as symmetric but only reads the lower triangle.
+	/// The output is symmetric.
+	void SymInvertPosDef();
 
   /////////////////////////////////////////////////////
   ///  Dimensions

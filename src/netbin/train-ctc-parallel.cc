@@ -50,6 +50,9 @@ int main(int argc, char *argv[]) {
 		bool block_softmax = false;
 		po.Register("block-softmax", &block_softmax, "Whether to use block-softmax or not (default is false). Note that you have to pass this parameter even if the provided model contains a BlockSoftmax layer.");
 
+		bool include_langid = false;
+    po.Register("include-langid", &include_langid, "Whether to include the langid in the input");
+
     po.Register("cross-validate", &crossvalidate, "Perform cross-validation (no backpropagation)");
 
     int32 num_sequence = 5;
@@ -118,7 +121,7 @@ int main(int argc, char *argv[]) {
 
     std::vector< Matrix<BaseFloat> > feats_utt(num_sequence);  // Feature matrix of every utterance
     std::vector< std::vector<int> > labels_utt(num_sequence);  // Label vector of every utterance
-    int32 feat_dim = net.InputDim();
+		
 
     int32 num_done = 0, num_no_tgt_mat = 0, num_other_error = 0, avg_count = 0;
 
@@ -128,6 +131,9 @@ int main(int argc, char *argv[]) {
 		{
       block_softmax_dims = net.GetBlockSoftmaxDims();
 		}
+
+		int32 feat_dim = net.InputDim(); // adding a one hot vector for now
+
     while (1) {
 
       std::vector<int> frame_num_utt;
@@ -136,6 +142,7 @@ int main(int argc, char *argv[]) {
       for ( ; !feature_reader.Done(); feature_reader.Next()) {
         std::string utt = feature_reader.Key();
         // Check that we have targets
+        KALDI_LOG << "processing utterance " << utt;
         if (!targets_reader.HasKey(utt)) {
           KALDI_WARN << utt << ", missing targets";
           num_no_tgt_mat++;
@@ -161,20 +168,89 @@ int main(int argc, char *argv[]) {
       
       // Create the final feature matrix. Every utterance is padded to the max length within this group of utterances
       Matrix<BaseFloat> feat_mat_host(cur_sequence_num * max_frame_num, feat_dim, kSetZero);
-      for (int s = 0; s < cur_sequence_num; s++) {
-        Matrix<BaseFloat> mat_tmp = feats_utt[s];
-        for (int r = 0; r < frame_num_utt[s]; r++) {
-          feat_mat_host.Row(r*cur_sequence_num + s).CopyFromVec(mat_tmp.Row(r));
+			Matrix<BaseFloat> given(cur_sequence_num * max_frame_num, 1, kSetZero); // only used when conditioningi
+			// KALDI_LOG << "BEFORE START";	
+			// KALDI_LOG << feat_dim;
+
+			if(net.IsConditioning()){
+				given.Resize(cur_sequence_num * max_frame_num, net.GetConditionInDim());
+				Vector<BaseFloat> giv(net.GetConditionInDim(), kSetZero);
+				Vector<BaseFloat> oneVec(1, kSetZero);
+        oneVec.ReplaceValue(0, 1);
+        for (int s = 0; s < cur_sequence_num; s++) {
+          int startIdx = 0;
+          int bl = 1000;
+          for(int i = 0; i < block_softmax_dims.size(); i++) {
+            if(labels_utt[s].size() > 0 && labels_utt[s][0] >= startIdx && labels_utt[s][0] < startIdx + block_softmax_dims[i]){
+              bl = i;
+            }
+            startIdx += block_softmax_dims[i];
+          }
+
+          Matrix<BaseFloat> mat_tmp = feats_utt[s];
+          for (int r = 0; r < frame_num_utt[s]; r++) {
+						giv.Range(bl, 1).CopyFromVec(oneVec);
+						given.Row(r*cur_sequence_num + s).CopyFromVec(giv);
+                
+					}
         }
-      }        
+			}
+			// KALDI_LOG << "START";	
+			Vector<BaseFloat> feat(feat_dim, kSetZero);
+
+			if(include_langid) {
+				Vector<BaseFloat> oneVec(1, kSetZero);
+				oneVec.ReplaceValue(0, 1);
+				for (int s = 0; s < cur_sequence_num; s++) {
+					int startIdx = 0;
+					int bl = 1000;
+          for(int i = 0; i < block_softmax_dims.size(); i++) {
+						if(labels_utt[s].size() > 0 && labels_utt[s][0] >= startIdx && labels_utt[s][0] < startIdx + block_softmax_dims[i]){
+							bl = i;
+						}
+						startIdx += block_softmax_dims[i];
+					}
+	
+	        Matrix<BaseFloat> mat_tmp = feats_utt[s];
+					for (int r = 0; r < frame_num_utt[s]; r++) {
+						feat.Range(0, mat_tmp.NumCols()).CopyFromVec(mat_tmp.Row(r));
+						// we get the index of this language
+						
+						feat.Range(mat_tmp.NumCols() + bl, 1).CopyFromVec(oneVec);
+						feat_mat_host.Row(r*cur_sequence_num + s).CopyFromVec(feat);
+					}
+				}
+			} else {
+			 //KALDI_LOG << feats_utt[0].NumCols();
+  		//	KALDI_LOG << feats_utt[0].NumRows();
+			//KALDI_LOG << feat_mat_host.Row(0*cur_sequence_num + 0).NumCols();
+	     for (int s = 0; s < cur_sequence_num; s++) {
+//				KALDI_LOG << "B 1";
+	       Matrix<BaseFloat> mat_tmp = feats_utt[s];
+//				 KALDI_LOG << "B 2";
+
+	       for (int r = 0; r < frame_num_utt[s]; r++) {
+//					 KALDI_LOG << "B 3";
+//					 KALDI_LOG << feat_mat_host.Row(r*cur_sequence_num + s).Dim();
+//					 KALDI_LOG <<	mat_tmp.Row(r).Dim();
+	         feat_mat_host.Row(r*cur_sequence_num + s).CopyFromVec(mat_tmp.Row(r));
+	       }
+//				 KALDI_LOG << "B 4";
+
+	      }
+			}      
+
       // Set the original lengths of utterances before padding
       net.SetSeqLengths(frame_num_utt);
+			// KALDI_LOG << "BEFORE ANYTHING";
+			// Propagation and CTC training
+			if(net.IsConditioning()){
+				net.PropagateCond(CuMatrix<BaseFloat>(feat_mat_host), CuMatrix<BaseFloat>(given), &net_out);
+			} else {
+	      net.Propagate(CuMatrix<BaseFloat>(feat_mat_host), &net_out);
+			}
 
-			
-			// KALDI_LOG << feat_mat_host.NumRows();
-      // Propagation and CTC training
-      net.Propagate(CuMatrix<BaseFloat>(feat_mat_host), &net_out);
-
+			// KALDI_LOG << "END OF PROPAGATION";
 
 			// I moved the Resize outside the EvalParallel for the block softmax to be convenient 
       obj_diff.Resize(net_out.NumRows(), net_out.NumCols());
@@ -218,13 +294,17 @@ int main(int argc, char *argv[]) {
       }
       // Backward pass
       if (!crossvalidate) {
-        net.Backpropagate(obj_diff, NULL);
-        if (num_jobs != 1 && (num_done + cur_sequence_num) / utts_per_avg != num_done / utts_per_avg) {
-          comm_avg_weights(net, job_id, num_jobs, avg_count, target_model_filename);
-          avg_count++;
-        }
-      }
-      
+				if(!net.IsConditioning()){
+	        net.Backpropagate(obj_diff, NULL);
+				} else {
+					net.BackpropagateCond(obj_diff, NULL);	
+				}
+	      if (num_jobs != 1 && (num_done + cur_sequence_num) / utts_per_avg != num_done / utts_per_avg) {
+		      comm_avg_weights(net, job_id, num_jobs, avg_count, target_model_filename);
+			    avg_count++;
+			  }
+			}
+           
       num_done += cur_sequence_num;
       total_frames += feat_mat_host.NumRows();
       

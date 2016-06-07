@@ -50,6 +50,7 @@ class Layer {
      
     l_Trainable = 0x0100, 
     l_Affine_Transform,
+		l_Affine_Transform_Cond,
     l_BiLstm,
     l_BiLstm_Parallel,
     l_Lstm,

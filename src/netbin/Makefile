@@ -15,7 +15,7 @@ OBJFILES =
 
 TESTFILES = 
 
-ADDLIBS = ../net/net.a ../gpucompute/gpucompute.a ../cpucompute/cpucompute.a \
+ADDLIBS = ../net/net.a  ../gpucompute/gpucompute.a ../cpucompute/cpucompute.a \
           ../util/util.a ../base/base.a 
 
 include ../makefiles/default_rules.mk

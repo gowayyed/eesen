@@ -30,6 +30,83 @@
 #include "ctc-utils.h"
 #include "stdio.h"
 
+
+// _trace_mat_mat expects to be called with 1 blocks, each of dimension
+// CU1DBLOCK.  Each block outputs a partial sum to value[blockIdx.x],
+// i.e. value[0 through 0].
+template<typename Real, int num_blocks>
+__global__
+static void _trace_mat_mat(const Real* A, const Real* B, MatrixDim dA, int B_stride, Real* value) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if(blockIdx.x > num_blocks || threadIdx.x > CU1DBLOCK) return;
+
+  int num_elements = dA.rows * dA.cols,
+      num_threads = CU1DBLOCK * num_blocks;
+  int block_size = (num_elements + num_threads - 1) / num_threads;
+  int loop_start = i * block_size, loop_end = (i + 1) * block_size;
+  if (loop_end > num_elements)
+    loop_end = num_elements;
+
+  Real sum = 0.0;
+  for (int j = loop_start; j < loop_end; j++) {
+    // for (int j = i; j < num_elements; j += num_threads) {
+    int row = j / dA.cols, col = j % dA.cols; // "row" is row-index in A, "col" is
+                                              // col-index in A; in B, it's reversed.
+    int index_A = col + row * dA.stride,
+        index_B = row + col * B_stride;
+    sum += A[index_A] * B[index_B];
+  }
+  __shared__ Real row_data[CU1DBLOCK];
+
+  row_data[threadIdx.x] = sum;
+
+  __syncthreads();
+
+  Real ans = _sum_reduce(row_data);
+  if (threadIdx.x == 0)
+    value[blockIdx.x] = ans;
+}
+
+// _trace_mat_mat_trans expects to be called with 4 blocks, each of dimension
+// CU1DBLOCK.  Each block outputs a partial sum to value[blockIdx.x],
+// i.e. value[0 through 3].
+template<typename Real, int num_blocks>
+__global__
+static void _trace_mat_mat_trans(const Real* A, const Real* B, MatrixDim dA, int B_stride, Real* value) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if(blockIdx.x > num_blocks || threadIdx.x > CU1DBLOCK) return;
+
+  int num_elements = dA.rows * dA.cols,
+      num_threads = CU1DBLOCK * num_blocks;
+  // int block_size = (num_elements + num_threads - 1) / num_threads;
+  // int loop_start = i * block_size, loop_end = (i + 1) * block_size;
+  // if (loop_end > num_elements)
+  //  loop_end = num_elements;
+
+  Real sum = 0.0;
+  // for (int j = loop_start; j < loop_end; j++) {
+  for (int j = i; j < num_elements; j += num_threads) {
+    int row = j / dA.cols, col = j % dA.cols; // "row" is row-index in A, "col" is
+                                              // col-index in A; in B, it's reversed.
+    int index_A = col + row * dA.stride,
+        index_B = col + row * B_stride;
+    sum += A[index_A] * B[index_B];
+  }
+  __shared__ Real row_data[CU1DBLOCK];
+
+  row_data[threadIdx.x] = sum;
+
+  __syncthreads();
+
+  Real ans = _sum_reduce(row_data);
+  if (threadIdx.x == 0)
+    value[blockIdx.x] = ans;
+}
+
+
+
 /***********************************************************************
  * Generic __device__ functions
  */
@@ -1683,4 +1760,24 @@ void cudaD_compute_ctc_error_multiple_sequence(dim3 Gr, dim3 Bl, double *error, 
 
 void cudaD_compute_ctc_error_multiple_sequence2(dim3 Gr, dim3 Bl, double *error, int seq_num, MatrixDim dim_error, const double *alpha, const double *beta, MatrixDim dim_alpha, const double *prob, MatrixDim dim_prob, const int *labels, int dim_label_stride, const int *seq_lengths, const double *pzx) {
   _compute_ctc_error_multiple_sequence2<<<Gr, Bl>>>(error, seq_num, dim_error, alpha, beta, dim_alpha, prob, dim_prob, labels, dim_label_stride, seq_lengths, pzx);
+}
+
+
+
+
+
+void cudaF_trace_mat_mat_trans(const float* A, const float* B, MatrixDim dA, int B_stride, float* value) {
+  _trace_mat_mat_trans<float,4> <<<4,CU1DBLOCK>>>(A,B,dA,B_stride,value);
+}
+
+void cudaF_trace_mat_mat(const float* A, const float* B, MatrixDim dA, int B_stride, float* value) {
+  _trace_mat_mat<float,2> <<<2,CU1DBLOCK>>>(A,B,dA,B_stride,value);
+}
+
+void cudaD_trace_mat_mat_trans(const double* A, const double* B, MatrixDim dA, int B_stride, double* value) {
+  _trace_mat_mat_trans<double,4> <<<4,CU1DBLOCK>>>(A,B,dA,B_stride,value);
+}
+
+void cudaD_trace_mat_mat(const double* A, const double* B, MatrixDim dA, int B_stride, double* value) {
+  _trace_mat_mat<double,2> <<<2,CU1DBLOCK>>>(A,B,dA,B_stride,value);
 }

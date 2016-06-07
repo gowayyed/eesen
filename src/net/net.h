@@ -50,6 +50,14 @@ class Net {
   /// Perform forward pass through the network, don't keep buffers (use it when not training)
   void Feedforward(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out); 
 
+	/// Perform forward pass through the network
+	void PropagateCond(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &cond, CuMatrix<BaseFloat> *out);
+	/// Perform backward pass through the network
+	void BackpropagateCond(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff);
+	/// Perform forward pass through the network, don't keep buffers (use it when not training)
+	void FeedforwardCond(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &cond, CuMatrix<BaseFloat> *out);
+	
+
   /// Dimensionality on network input (input feature dim.)
   int32 InputDim() const; 
   /// Dimensionality of network outputs (posteriors | bn-features | etc.)
@@ -139,6 +147,9 @@ class Net {
 
 	std::vector<int>  GetBlockSoftmaxDims();
 
+	bool IsConditioning() const;
+	int GetConditionInDim() const;
+	int GetConditionOutDim() const;
  private:
   /// Vector which contains all the layers composing the neural network,
   /// the layers are for example: AffineTransform, Sigmoid, Softmax
