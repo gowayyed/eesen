@@ -52,6 +52,8 @@ class CuMatrixBase {
   friend class VectorBase<Real>;
   friend class CuVectorBase<Real>;
   friend class CuSubMatrix<Real>;
+	friend class CuSpMatrix<Real>;
+	friend class CuTpMatrix<Real>;
   friend class CuRand<Real>;
   friend class CuSubVector<Real>;
   friend void cu::RegularizeL1<Real>(CuMatrixBase<Real> *weight,
@@ -119,7 +121,12 @@ class CuMatrixBase {
   template<typename OtherReal>
   void CopyToMat(MatrixBase<OtherReal> *dst,
                  MatrixTransposeType trans = kNoTrans) const;
-
+	
+	void CopyFromSp(const CuSpMatrix<Real> &M);
+  
+  template<typename OtherReal>
+  void CopyFromTp(const CuTpMatrix<OtherReal> &M,
+                  MatrixTransposeType trans = kNoTrans);
 
   /////////////////////////////////////////////////////
   ///////  Basic operations
@@ -253,7 +260,30 @@ class CuMatrixBase {
                     const CuMatrixBase<Real>& B, MatrixTransposeType transB,
                     const Real beta);
 
+	/// *this = beta * *this + alpha * diag(v) * M [or M^T].
+  /// The same as adding M but scaling each row M_i by v(i).
+  void AddDiagVecMat(const Real alpha, CuVectorBase<Real> &v,
+                     const CuMatrixBase<Real> &M, MatrixTransposeType transM, 
+                     Real beta = 1.0);  
 
+
+ /// this <-- beta*this + alpha*SpA*B
+  void AddSpMat(const Real alpha,
+                const CuSpMatrix<Real> &A,
+                const CuMatrixBase<Real> &B, MatrixTransposeType transB,
+                const Real beta) {
+    CuMatrix<Real> M(A);
+    return AddMatMat(alpha, M, kNoTrans, B, transB, beta);
+  }
+
+  /// this <-- beta*this + alpha*A*B.
+  void AddTpMat(const Real alpha,
+                const CuTpMatrix<Real> &A, MatrixTransposeType transA,
+                const CuMatrixBase<Real> &B, MatrixTransposeType transB,
+                const Real beta) {
+    CuMatrix<Real> M(A);
+    return AddMatMat(alpha, M, transA, B, transB, beta);
+  }
   /////////////////////////////////////////////////////
   ///// SubMatrix and SubVector
   /////////////////////////////////////////////////////
@@ -378,6 +408,21 @@ class CuMatrix: public CuMatrixBase<Real> {
   template<typename OtherReal>
   explicit CuMatrix(const MatrixBase<OtherReal> &other,
                     MatrixTransposeType trans = kNoTrans);
+
+	/// Copy constructor taking SpMatrix... 
+  explicit CuMatrix(const CuSpMatrix<Real> &M) : CuMatrixBase<Real>() {
+    Resize(M.NumRows(), M.NumRows(), kUndefined);
+    this->CopyFromSp(M);
+  }
+
+  /// Copy constructor taking TpMatrix...
+  template <typename OtherReal>
+  explicit CuMatrix(const CuTpMatrix<OtherReal> & M,
+                    MatrixTransposeType trans = kNoTrans) : CuMatrixBase<Real>() {
+    Resize(M.NumCols(), M.NumRows(), kUndefined);
+    this->CopyFromTp(M, trans);
+  }	
+
 
   template<typename OtherReal>
   explicit CuMatrix(const CuMatrixBase<OtherReal> &M,

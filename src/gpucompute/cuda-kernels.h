@@ -54,11 +54,22 @@ void cudaD_apply_exp(dim3 Gr, dim3 Bl, double* mat, MatrixDim d);
 void cudaF_apply_pow(dim3 Gr, dim3 Bl, float* mat, float power, MatrixDim d);
 void cudaD_apply_pow(dim3 Gr, dim3 Bl, double* mat, double power, MatrixDim d);
 
+void cudaF_vec_copy_diag_from_packed(int Gr, int Bl, float *dst, const float *src, int dim);
+void cudaD_vec_copy_diag_from_packed(int Gr, int Bl, double *dst, const double *src, int dim);
+
 void cudaF_apply_floor(dim3 Gr, dim3 Bl, float* mat, float floor_val, MatrixDim d);
 void cudaD_apply_floor(dim3 Gr, dim3 Bl, double* mat, double floor_val, MatrixDim d);
 
 void cudaF_apply_ceiling(dim3 Gr, dim3 Bl, float* mat, float ceiling_val, MatrixDim d);
 void cudaD_apply_ceiling(dim3 Gr, dim3 Bl, double* mat, double ceiling_val, MatrixDim d);
+
+void cudaF_set_diag_packed(int Gr, int Bl, float* mat, float value, int dim);
+void cudaF_add_diag_packed(int Gr, int Bl, float* mat, float value, int dim);
+void cudaF_scale_diag_packed(int Gr, int Bl, float* mat, float value, int dim);
+
+void cudaD_set_diag_packed(int Gr, int Bl, double* mat, double value, int dim);
+void cudaD_add_diag_packed(int Gr, int Bl, double* mat, double value, int dim);
+void cudaD_scale_diag_packed(int Gr, int Bl, double* mat, double value, int dim);
 
 void cudaF_set_const(dim3 Gr, dim3 Bl, float *mat, float value, MatrixDim d);
 void cudaD_set_const(dim3 Gr, dim3 Bl, double *mat, double value, MatrixDim d);
@@ -163,8 +174,29 @@ void cudaD_randomize(dim3 Gr, dim3 Bl, double *y, const double *x, const int32_c
 void cudaF_splice(dim3 Gr, dim3 Bl, float *y, const float *x, const int32_cuda *off, MatrixDim d_out, MatrixDim d_in);
 void cudaD_splice(dim3 Gr, dim3 Bl, double *y, const double *x, const int32_cuda *off, MatrixDim d_out, MatrixDim d_in);
 
+void cudaF_take_lower(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in);
+void cudaF_take_upper(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in);
+void cudaF_take_mean(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in);
+
+void cudaD_take_lower(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in);
+void cudaD_take_upper(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in);
+void cudaD_take_mean(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in);
+
+void cudaF_copy_from_sp(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_out);
+void cudaD_copy_from_sp(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_out);
+
 void cudaF_copy(dim3 Gr, dim3 Bl, float *y, const float *x, const int32_cuda *copy_from, MatrixDim d_out, MatrixDim d_in);
 void cudaD_copy(dim3 Gr, dim3 Bl, double *y, const double *x, const int32_cuda *copy_from, MatrixDim d_out, MatrixDim d_in);
+
+void cudaF_copy_from_tp_trans(dim3 Gr, dim3 Bl, float* A, const float* B, MatrixDim dmat);
+void cudaFD_copy_from_tp_trans(dim3 Gr, dim3 Bl, float* A, const double* B, MatrixDim dmat);
+void cudaF_copy_from_tp(dim3 Gr, dim3 Bl, float* A, const float* B, MatrixDim dmat);
+void cudaFD_copy_from_tp(dim3 Gr, dim3 Bl, float* A, const double* B, MatrixDim dmat);
+
+void cudaD_copy_from_tp_trans(dim3 Gr, dim3 Bl, double* A, const double* B, MatrixDim dmat);
+void cudaDF_copy_from_tp_trans(dim3 Gr, dim3 Bl, double* A, const float* B, MatrixDim dmat);
+void cudaD_copy_from_tp(dim3 Gr, dim3 Bl, double* A, const double* B, MatrixDim dmat);
+void cudaDF_copy_from_tp(dim3 Gr, dim3 Bl, double* A, const float* B, MatrixDim dmat);
 
 
 // some mostly mixed-type kernels.

@@ -51,6 +51,9 @@ template<typename Real> class SubVector;
 template<typename Real> class MatrixBase;
 template<typename Real> class SubMatrix;
 template<typename Real> class Matrix;
+template<typename Real> class PackedMatrix;
+template<typename Real> class SpMatrix;
+template<typename Real> class TpMatrix;
 
 // these are classes that won't be defined in this
 // directory; they're mostly needed for friend declarations.
@@ -60,6 +63,9 @@ template<typename Real> class CuMatrix;
 template<typename Real> class CuVectorBase;
 template<typename Real> class CuSubVector;
 template<typename Real> class CuVector;
+template<typename Real> class CuPackedMatrix;
+template<typename Real> class CuSpMatrix;
+template<typename Real> class CuTpMatrix;
 
 class CompressedMatrix;
 

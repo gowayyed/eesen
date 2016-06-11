@@ -186,7 +186,18 @@ class VectorBase {
   void AddMatSvec(const Real alpha, const MatrixBase<Real> &M,
                   const MatrixTransposeType trans,  const VectorBase<Real> &v,
                   const Real beta); // **beta previously defaulted to 0.0**
+	
+	/// Add symmetric positive definite matrix times vector:
+  ///  this <-- beta*this + alpha*M*v.   Calls BLAS SPMV.
+  void AddSpVec(const Real alpha, const SpMatrix<Real> &M,
+                const VectorBase<Real> &v, const Real beta);  // **beta previously defaulted to 0.0**
 
+  /// Add triangular matrix times vector: this <-- beta*this + alpha*M*v.
+  /// Works even if rv == *this.
+  void AddTpVec(const Real alpha, const TpMatrix<Real> &M,
+                const MatrixTransposeType trans, const VectorBase<Real> &v,
+                const Real beta);  // **beta previously defaulted to 0.0**	
+	
   
   /// Set each element to y = (x == orig ? changed : x).
   void ReplaceValue(Real orig, Real changed);
@@ -219,6 +230,9 @@ class VectorBase {
   /// Multiplies all elements by this constant.
   void Scale(Real alpha);
 
+	/// Multiplies this vector by lower-triangular marix:  *this <-- *this *M
+  void MulTp(const TpMatrix<Real> &M, const MatrixTransposeType trans);	
+
   /// Performs a row stack of the matrix M
   void CopyRowsFromMat(const MatrixBase<Real> &M);
   template<typename OtherReal>
@@ -237,6 +251,14 @@ class VectorBase {
   template<typename OtherReal>
   void CopyRowFromMat(const MatrixBase<OtherReal> &M, MatrixIndexT row);
 
+	/// Extracts a row of the symmetric matrix S.
+  template<typename OtherReal>
+  void CopyRowFromSp(const SpMatrix<OtherReal> &S, MatrixIndexT row);
+  
+  /// Extracts diagonal elements of the symmetric matrix S.
+  template<typename OtherReal>
+  void CopyDiagFromSp(const SpMatrix<OtherReal> &S, MatrixIndexT row);
+
   /// Extracts a column of the matrix M.
   template<typename OtherReal>
   void CopyColFromMat(const MatrixBase<OtherReal> &M , MatrixIndexT col);
@@ -244,6 +266,16 @@ class VectorBase {
   /// Extracts the diagonal of the matrix M.
   void CopyDiagFromMat(const MatrixBase<Real> &M);
 
+	
+  /// Extracts the diagonal of a packed matrix M; works for Sp or Tp.
+  void CopyDiagFromPacked(const PackedMatrix<Real> &M);
+
+  /// Extracts the diagonal of a symmetric matrix.
+  inline void CopyDiagFromSp(const SpMatrix<Real> &M) { CopyDiagFromPacked(M); }
+
+  /// Extracts the diagonal of a triangular matrix.
+  inline void CopyDiagFromTp(const TpMatrix<Real> &M) { CopyDiagFromPacked(M); }
+	
   /// Returns the maximum value of any element, or -infinity for the empty vector.
   Real Max() const;
 

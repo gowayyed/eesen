@@ -34,6 +34,8 @@
 #include "gpucompute/cuda-common.h"
 #include "gpucompute/cuda-vector.h"
 #include "gpucompute/cuda-device.h"
+#include "gpucompute/cuda-tp-matrix.h"
+#include "gpucompute/cuda-sp-matrix.h"
 #include "gpucompute/cuda-kernels-wrappers.h"
 #include "gpucompute/cuda-randkernels-wrappers.h"
 #include "gpucompute/cuda-array.h"
@@ -344,6 +346,62 @@ void CuMatrixBase<Real>::CopyFromMat(const CuMatrixBase<OtherReal> &M,
     Mat().CopyFromMat(M.Mat(), Trans);
   }
 }
+
+template<typename Real>
+void CuMatrixBase<Real>::CopyFromSp(const CuSpMatrix<Real> &M) {
+  KALDI_ASSERT(num_rows_ == M.NumRows() && num_cols_ == num_rows_);
+  if (num_rows_ == 0)
+    return;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumRows(), CU2DBLOCK),
+                 n_blocks(NumRows(), CU2DBLOCK));
+    cuda_copy_from_sp(dimGrid, dimBlock, M.Data(), data_, Dim());
+    CuDevice::Instantiate().AccuProfile("CuMatrix::CopyFromSp",tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().CopyFromSp(M.Mat());
+  }
+}
+
+template<typename Real>
+template<typename OtherReal>
+void CuMatrixBase<Real>::CopyFromTp(const CuTpMatrix<OtherReal> &M,
+                                    MatrixTransposeType Trans) {
+  KALDI_ASSERT(num_rows_ == M.NumRows() && num_cols_ == num_rows_);
+  if (num_rows_ == 0)
+    return;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(num_rows_, CU2DBLOCK),
+                 n_blocks(num_rows_, CU2DBLOCK));
+    if (Trans == kNoTrans) {
+      cuda_copy_from_tp(dimGrid, dimBlock, data_, M.Data(), Dim());
+    } else {
+      cuda_copy_from_tp_trans(dimGrid, dimBlock, data_, M.Data(), Dim());      
+    }
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());    
+  } else
+#endif
+  {
+    Mat().CopyFromTp(M.Mat(), Trans);
+  }
+}
+
+// instantiate the template above.
+template void CuMatrixBase<float>::CopyFromTp(const CuTpMatrix<float> &M,
+                                              MatrixTransposeType Trans);
+template void CuMatrixBase<float>::CopyFromTp(const CuTpMatrix<double> &M,
+                                              MatrixTransposeType Trans);
+template void CuMatrixBase<double>::CopyFromTp(const CuTpMatrix<float> &M,
+                                              MatrixTransposeType Trans);
+template void CuMatrixBase<double>::CopyFromTp(const CuTpMatrix<double> &M,
+                                              MatrixTransposeType Trans);
 
 template
 void CuMatrixBase<float>::CopyFromMat<float>(const CuMatrixBase<float> &M,
@@ -835,6 +893,42 @@ void CuMatrixBase<Real>::ApplySoftMaxPerRow(const CuMatrixBase<Real> &src) {
     }
   }
 }
+
+
+
+template<typename Real>
+void CuMatrixBase<Real>::AddDiagVecMat(
+    const Real alpha, CuVectorBase<Real> &v,
+    const CuMatrixBase<Real> &M, MatrixTransposeType transM,
+    Real beta) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    if (transM == kNoTrans) {
+      KALDI_ASSERT(SameDim(*this, M));
+    } else {
+      KALDI_ASSERT(M.NumRows() == NumCols() && M.NumCols() == NumRows());
+    }
+    KALDI_ASSERT(v.Dim() == this->NumRows());
+
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+
+    dim3 dimGrid(n_blocks(num_cols_, CU2DBLOCK),
+                 n_blocks(num_rows_, CU2DBLOCK));
+
+    MatrixIndexT M_row_stride = M.Stride(), M_col_stride = 1;
+    if (transM == kTrans)
+      std::swap(M_row_stride, M_col_stride);
+    cuda_add_diag_vec_mat(dimGrid, dimBlock, alpha, data_, Dim(),
+                          v.Data(), M.Data(), M_row_stride, M_col_stride, beta);
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().AddDiagVecMat(alpha, v.Vec(), M.Mat(), transM, beta);
+  }
+}  
 
 template<typename Real>
 void CuMatrixBase<Real>::Sigmoid(const CuMatrixBase<Real> &src) {

@@ -12,7 +12,7 @@ include ../config.mk
 
 TESTFILES =
 
-OBJFILES = matrix.o vector.o matrix-functions.o compressed-matrix.o
+OBJFILES = matrix.o vector.o matrix-functions.o compressed-matrix.o sp-matrix.o tp-matrix.o
 
 LIBNAME = cpucompute
 

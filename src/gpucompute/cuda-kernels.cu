@@ -222,6 +222,43 @@ static int32_cuda _max_id_reduce(Real val[], int32_cuda idx[]) {
  */
 
 
+template<typename Real, typename OtherReal>
+__global__
+static void _copy_from_tp(Real* A, const OtherReal* B, MatrixDim dmat) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (i < dmat.rows && j < dmat.cols) {
+    int32_cuda index_B = (i * (i+1) / 2) + j;
+    int32_cuda index_A = i * dmat.stride + j;
+    if (j <= i) {
+      A[index_A] = B[index_B];
+    } else {
+      A[index_A] = 0.0;
+    }
+  }
+}
+
+
+template<typename Real, typename OtherReal>
+__global__
+static void _copy_from_tp_trans(Real* A, const OtherReal* B, MatrixDim dmat) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
+  // transpose the indices used to index the source TpMatrix.
+  if (i < dmat.rows && j < dmat.cols) {
+    int32_cuda index_B = (j * (j+1) / 2) + i;
+    int32_cuda index_A = i * dmat.stride + j;
+    if (i <= j) {
+      A[index_A] = B[index_B];
+    } else {
+      A[index_A] = 0.0;
+    }
+  }
+}
+
+
+
 // for this kernel, following the newer pattern, the x-dim is the row-index, the
 // y-dim is the col-index.
 template<typename Real, typename OtherReal>
@@ -258,6 +295,36 @@ static void _apply_exp(Real* mat, MatrixDim d) {
   int32_cuda index = i + j * d.stride;
   if ( i < d.cols && j < d.rows ) {
     mat[index] = exp(mat[index]);
+  }
+}
+
+template<typename Real>
+__global__
+static void _scale_diag_packed(Real* mat, Real value, int dim) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda index = ((i+1)*(i+2)/2) - 1;
+  if ( i < dim ) {
+     mat[index] = value * mat[index];
+  }
+}
+
+template<typename Real>
+__global__
+static void _set_diag_packed(Real* mat, Real value, int dim) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda index = ((i+1)*(i+2)/2) - 1;
+  if ( i < dim ) {
+     mat[index] = value;
+  }
+}
+
+template<typename Real>
+__global__
+static void _add_diag_packed(Real* mat, Real value, int dim) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda index = ((i+1)*(i+2)/2) - 1;
+  if ( i < dim ) {
+    mat[index] = mat[index] + value;
   }
 }
 
@@ -587,6 +654,15 @@ static void _pvec_sum(Real* v, Real* g, int dim, int size) {
 }
 
 
+template<typename Real>
+__global__
+static void _vec_copy_diag_from_packed(Real* y, const Real* x, int dim) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda index = ((i+1) * (i+2) / 2) - 1;
+  if (i < dim) {
+     y[i] = x[index];
+  }
+}
 
 template<typename Real>
 __global__
@@ -850,6 +926,59 @@ static void _splice(Real* y, const Real* x, const int32_cuda* off, MatrixDim d_o
 
 template<typename Real>
 __global__
+static void _take_mean(const Real* x, Real* y, MatrixDim d_in) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
+  int32_cuda index1 = i + j * d_in.stride;
+  int32_cuda index2 = j + i * d_in.stride;
+  if (i <= j && j < d_in.rows) {
+    int32_cuda index_sp = (j * (j+1) / 2) + i;
+    y[index_sp] = 0.5 * (x[index1] + x[index2]);
+  }
+}
+
+template<typename Real>
+__global__
+static void _take_lower(const Real* x, Real* y, MatrixDim d_in) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x; // row-index
+  int j = blockIdx.y * blockDim.y + threadIdx.y; // col-index
+  if (j > i || i >= d_in.rows) return;
+  int index = i * d_in.stride + j;
+  Real val = x[index];
+  int index_sp = (i * (i+1) / 2) + j;
+  y[index_sp] = val;
+}
+
+template<typename Real>
+__global__
+static void _take_upper(const Real* x, Real* y, MatrixDim d_in) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x; // row-index
+  int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y; // col-index
+  if (j < i  || j >= d_in.rows) return;
+  int32_cuda index = i * d_in.stride + j;
+  int32_cuda index_sp = (j * (j+1) / 2) + i;
+  y[index_sp] = x[index];
+}
+
+
+template<typename Real>
+__global__
+static void _copy_from_sp(const Real* x, Real* y, MatrixDim dim) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  if (i < dim.rows && j < dim.cols) {
+    int dst_index = i * dim.stride + j, src_index;
+    if (j <= i) {  // no transpose
+      src_index = (i * (i+1) / 2) + j;
+    } else { // transpose.
+      src_index = (j * (j+1) / 2) + i;
+    }
+    y[dst_index] = x[src_index];
+  }
+}
+
+template<typename Real>
+__global__
 static void _copy(Real* y, const Real* x, const int32_cuda* copy_from, MatrixDim d_out, MatrixDim d_in) {
   int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
   int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -964,6 +1093,14 @@ void cudaD_apply_pow(dim3 Gr, dim3 Bl, double* mat, double power, MatrixDim d) {
   _apply_pow<<<Gr,Bl>>>(mat, power, d);
 }
 
+void cudaF_vec_copy_diag_from_packed(int Gr, int Bl, float *dst, const float *src, int dim) {
+  _vec_copy_diag_from_packed<<<Gr,Bl>>>(dst,src,dim);
+}
+
+void cudaD_vec_copy_diag_from_packed(int Gr, int Bl, double *dst, const double *src, int dim) {
+  _vec_copy_diag_from_packed<<<Gr,Bl>>>(dst,src,dim);
+}
+
 void cudaF_apply_floor(dim3 Gr, dim3 Bl, float* mat, float floor_val, MatrixDim d) {
   _apply_floor<<<Gr,Bl>>>(mat, floor_val, d);
 }
@@ -992,6 +1129,30 @@ void cudaF_add(dim3 Gr, dim3 Bl, float* mat, float value, MatrixDim d) {
 }
 void cudaD_add(dim3 Gr, dim3 Bl, double* mat, double value, MatrixDim d) {
   _add<<<Gr,Bl>>>(mat,value,d);
+}
+
+void cudaF_scale_diag_packed(int Gr, int Bl, float* mat, float value, int dim) {
+  _scale_diag_packed<<<Gr,Bl>>>(mat,value,dim);
+}
+
+void cudaD_scale_diag_packed(int Gr, int Bl, double* mat, double value, int dim) {
+  _scale_diag_packed<<<Gr,Bl>>>(mat,value,dim);
+}
+
+void cudaF_set_diag_packed(int Gr, int Bl, float* mat, float value, int dim) {
+  _set_diag_packed<<<Gr,Bl>>>(mat,value,dim);
+}
+
+void cudaD_set_diag_packed(int Gr, int Bl, double* mat, double value, int dim) {
+  _set_diag_packed<<<Gr,Bl>>>(mat,value,dim);
+}
+
+void cudaF_add_diag_packed(int Gr, int Bl, float* mat, float value, int dim) {
+  _add_diag_packed<<<Gr,Bl>>>(mat,value,dim);
+}
+
+void cudaD_add_diag_packed(int Gr, int Bl, double* mat, double value, int dim) {
+  _add_diag_packed<<<Gr,Bl>>>(mat,value,dim);
 }
 
 void cudaF_scale(dim3 Gr, dim3 Bl, float* mat, float value, MatrixDim d) {
@@ -1047,6 +1208,20 @@ void cudaD_add_vec_to_rows(dim3 Gr, dim3 Bl, double alpha, const double* row, do
 /*
  * CuVector
  */
+
+void cudaF_copy_from_tp_trans(dim3 Gr, dim3 Bl, float* A, const float* B, MatrixDim dmat) {
+  _copy_from_tp_trans<<<Gr,Bl>>>(A,B,dmat);
+}
+void cudaFD_copy_from_tp_trans(dim3 Gr, dim3 Bl, float* A, const double* B, MatrixDim dmat) {
+  _copy_from_tp_trans<<<Gr,Bl>>>(A,B,dmat);
+}
+
+void cudaF_copy_from_tp(dim3 Gr, dim3 Bl, float* A, const float* B, MatrixDim dmat) {
+  _copy_from_tp<<<Gr,Bl>>>(A,B,dmat);
+}
+void cudaFD_copy_from_tp(dim3 Gr, dim3 Bl, float* A, const double* B, MatrixDim dmat) {
+  _copy_from_tp<<<Gr,Bl>>>(A,B,dmat);
+}
 
 void cudaF_copy_from_vec_df(int Gr, int Bl, double* v_out, const float* v_in, int dim) {
   _copy_from_vec_df<<<Gr,Bl>>>(v_out,v_in,dim);
@@ -1197,9 +1372,43 @@ void cudaD_splice(dim3 Gr, dim3 Bl, double* y, const double* x, const int32_cuda
   _splice<<<Gr,Bl>>>(y,x,off,d_out,d_in);
 }
 
+void cudaF_take_mean(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in) {
+  _take_mean<<<Gr,Bl>>>(x,y,d_in);
+}
+
+void cudaF_take_lower(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in) {
+  _take_lower<<<Gr,Bl>>>(x,y,d_in);
+}
+
+void cudaF_take_upper(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim d_in) {
+  _take_upper<<<Gr,Bl>>>(x,y,d_in);
+}
+
+
+void cudaD_take_mean(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in) {
+  _take_mean<<<Gr,Bl>>>(x,y,d_in);
+}
+
+void cudaD_take_lower(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in) {
+  _take_lower<<<Gr,Bl>>>(x,y,d_in);
+}
+
+void cudaD_take_upper(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_in) {
+  _take_upper<<<Gr,Bl>>>(x,y,d_in);
+}
+
+void cudaF_copy_from_sp(dim3 Gr, dim3 Bl, const float* x, float* y, MatrixDim dim) {
+  _copy_from_sp<<<Gr,Bl>>>(x, y, dim);
+}
+
+void cudaD_copy_from_sp(dim3 Gr, dim3 Bl, const double* x, double* y, MatrixDim d_out) {
+  _copy_from_sp<<<Gr,Bl>>>(x,y,d_out);
+}
+
 void cudaF_copy(dim3 Gr, dim3 Bl, float* y, const float* x, const int32_cuda* copy_from, MatrixDim d_out, MatrixDim d_in) {
   _copy<<<Gr,Bl>>>(y,x,copy_from,d_out,d_in); 
 }
+
 void cudaD_copy(dim3 Gr, dim3 Bl, double* y, const double* x, const int32_cuda* copy_from, MatrixDim d_out, MatrixDim d_in) {
   _copy<<<Gr,Bl>>>(y,x,copy_from,d_out,d_in);
 }

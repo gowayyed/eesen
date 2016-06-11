@@ -65,6 +65,19 @@ extern "C" {
 // The size of edge of CUDA square block, e.g. for matrix operations.
 // Must be defined the same in cu-kernels-ansi.h
 #define CU2DBLOCK 16
+	/** This structure is used in cu-block-matrix.h to store information
+      about a block-diagonal matrix.  We declare it here so that it
+      will be accessible
+   */
+  typedef struct CuBlockMatrixData_ {
+    int32_cuda row_offset; // sum of #rows of previous M_i
+    int32_cuda col_offset; // sum of #cols of previous M_i
+    MatrixDim matrix_dim; // dimension of this M_i
+    void *matrix_data; // data for M_i.  This is a pointer to either float* or
+                       // double*.  Because C doesn't support templates and to
+                       // avoid extra coding to support the two cases, we
+                       // decided to make this a void* pointer.
+  } CuBlockMatrixData;
 
   typedef struct Int32Pair {
     int32_cuda first;

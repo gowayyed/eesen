@@ -26,6 +26,7 @@
 #include "cpucompute/cblas-wrappers.h"
 #include "cpucompute/vector.h"
 #include "cpucompute/matrix.h"
+#include "cpucompute/sp-matrix.h"
 
 namespace eesen {
 
@@ -131,6 +132,23 @@ void VectorBase<Real>::AddMatSvec(const Real alpha,
                   M_data + (i * M_stride), 1, this_data, 1);
     }
     }*/
+}
+
+template<typename Real>
+void VectorBase<Real>::AddSpVec(const Real alpha,
+                                 const SpMatrix<Real> &M,
+                                 const VectorBase<Real> &v,
+                                 const Real beta) {
+  KALDI_ASSERT(M.NumRows() == v.dim_ && dim_ == v.dim_);
+  KALDI_ASSERT(&v != this);
+  cblas_Xspmv(alpha, M.NumRows(), M.Data(), v.Data(), 1, beta, data_, 1);
+}
+
+template<typename Real>
+void VectorBase<Real>::MulTp(const TpMatrix<Real> &M,
+                              const MatrixTransposeType trans) {
+  KALDI_ASSERT(M.NumRows() == dim_);
+  cblas_Xtpmv(trans,M.Data(),M.NumRows(),data_,1);
 }
 
 template<typename Real>
@@ -371,6 +389,55 @@ void VectorBase<float>::CopyRowFromMat(const MatrixBase<double> &mat, MatrixInde
 template
 void VectorBase<double>::CopyRowFromMat(const MatrixBase<float> &mat, MatrixIndexT row);
 
+template<typename Real>
+template<typename OtherReal>
+void VectorBase<Real>::CopyRowFromSp(const SpMatrix<OtherReal> &sp, MatrixIndexT row) {
+  KALDI_ASSERT(row < sp.NumRows());
+  KALDI_ASSERT(dim_ == sp.NumCols());
+  
+  const OtherReal *sp_data = sp.Data();
+
+  sp_data += (row*(row+1)) / 2; // takes us to beginning of this row.
+  MatrixIndexT i;
+  for (i = 0; i < row; i++) // copy consecutive elements.
+    data_[i] = static_cast<Real>(*(sp_data++));
+  for(; i < dim_; ++i, sp_data += i) 
+    data_[i] = static_cast<Real>(*sp_data);
+}
+
+template
+void VectorBase<float>::CopyRowFromSp(const SpMatrix<double> &mat, MatrixIndexT row);
+template
+void VectorBase<double>::CopyRowFromSp(const SpMatrix<float> &mat, MatrixIndexT row);
+template
+void VectorBase<float>::CopyRowFromSp(const SpMatrix<float> &mat, MatrixIndexT row);
+template
+void VectorBase<double>::CopyRowFromSp(const SpMatrix<double> &mat, MatrixIndexT row);
+
+template<typename Real>
+template<typename OtherReal>
+void VectorBase<Real>::CopyDiagFromSp(const SpMatrix<OtherReal> &sp, MatrixIndexT row) {
+  KALDI_ASSERT(row < sp.NumRows());
+  KALDI_ASSERT(dim_ == sp.NumCols());
+  
+  const OtherReal *sp_data = sp.Data();
+
+  for (MatrixIndexT i = 0; i < row; i++) {
+    data_[i] = static_cast<Real>(*(sp_data));
+    sp_data += i+2;
+  }
+}
+
+template
+void VectorBase<float>::CopyDiagFromSp(const SpMatrix<double> &mat, MatrixIndexT row);
+template
+void VectorBase<double>::CopyDiagFromSp(const SpMatrix<float> &mat, MatrixIndexT row);
+template
+void VectorBase<float>::CopyDiagFromSp(const SpMatrix<float> &mat, MatrixIndexT row);
+template
+void VectorBase<double>::CopyDiagFromSp(const SpMatrix<double> &mat, MatrixIndexT row);
+
+
 
 #ifdef HAVE_MKL
 template<>
@@ -601,6 +668,15 @@ template<typename Real>
 void VectorBase<Real>::CopyDiagFromMat(const MatrixBase<Real> &M) {
   KALDI_ASSERT(dim_ == std::min(M.NumRows(), M.NumCols()));
   cblas_Xcopy(dim_, M.Data(), M.Stride() + 1, data_, 1);
+}
+
+
+template<typename Real>
+void VectorBase<Real>::CopyDiagFromPacked(const PackedMatrix<Real> &M) {
+  KALDI_ASSERT(dim_ == M.NumCols());
+  for (MatrixIndexT i = 0; i < dim_; i++)
+    data_[i] = M(i, i);
+  // could make this more efficient.
 }
 
 template<typename Real>
@@ -1139,6 +1215,26 @@ void VectorBase<Real>::AddVec2(const Real alpha, const VectorBase<Real> &v) {
   KALDI_ASSERT(dim_ == v.dim_);
   for (MatrixIndexT i = 0; i < dim_; i++)
     data_[i] += alpha * v.data_[i] * v.data_[i];
+}
+
+
+// this <-- beta*this + alpha*M*v.
+template<typename Real>
+void VectorBase<Real>::AddTpVec(const Real alpha, const TpMatrix<Real> &M,
+                                const MatrixTransposeType trans,
+                                const VectorBase<Real> &v,
+                                const Real beta) {
+  KALDI_ASSERT(dim_ == v.dim_ && dim_ == M.NumRows());
+  if (beta == 0.0) {
+    if (&v != this) CopyFromVec(v);
+    MulTp(M, trans);
+    if (alpha != 1.0) Scale(alpha);
+  } else {
+    Vector<Real> tmp(v);
+    tmp.MulTp(M, trans);
+    if (beta != 1.0) Scale(beta);  // *this <-- beta * *this
+    AddVec(alpha, tmp);          // *this += alpha * M * v
+  }
 }
 
 template<typename Real>

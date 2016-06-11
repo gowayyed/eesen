@@ -23,6 +23,7 @@
 #include "cpucompute/matrix.h"
 #include "cpucompute/cblas-wrappers.h"
 #include "cpucompute/compressed-matrix.h"
+#include "cpucompute/sp-matrix.h"
 
 namespace eesen {
 
@@ -454,6 +455,91 @@ void MatrixBase<Real>::AddMatDotMat(const Real alpha,
     }
 }
 
+
+#if !defined(HAVE_ATLAS) && !defined(USE_KALDI_SVD)
+// ****************************************************************************
+// ****************************************************************************
+template<typename Real>
+void MatrixBase<Real>::LapackGesvd(VectorBase<Real> *s, MatrixBase<Real> *U_in, 
+                                   MatrixBase<Real> *V_in) {
+  KALDI_ASSERT(s != NULL && U_in != this && V_in != this);
+
+  Matrix<Real> tmpU, tmpV;
+  if (U_in == NULL) tmpU.Resize(this->num_rows_, 1);  // work-space if U_in empty.
+  if (V_in == NULL) tmpV.Resize(1, this->num_cols_);  // work-space if V_in empty.
+
+  /// Impementation notes:
+  /// Lapack works in column-order, therefore the dimensions of *this are
+  /// swapped as well as the U and V matrices.
+
+  KaldiBlasInt M   = num_cols_;
+  KaldiBlasInt N   = num_rows_;
+  KaldiBlasInt LDA = Stride();
+
+  KALDI_ASSERT(N>=M);  // NumRows >= columns.
+
+  if (U_in) {
+    KALDI_ASSERT((int)U_in->num_rows_ == N && (int)U_in->num_cols_ == M);
+  }
+  if (V_in) {
+    KALDI_ASSERT((int)V_in->num_rows_ == M && (int)V_in->num_cols_ == M);
+  }
+  KALDI_ASSERT((int)s->Dim() == std::min(M, N));
+
+  MatrixBase<Real> *U = (U_in ? U_in : &tmpU);
+  MatrixBase<Real> *V = (V_in ? V_in : &tmpV);
+
+  KaldiBlasInt V_stride      = V->Stride();
+  KaldiBlasInt U_stride      = U->Stride();
+
+  // Original LAPACK recipe
+  // KaldiBlasInt l_work = std::max(std::max<long int>
+  //   (1, 3*std::min(M, N)+std::max(M, N)), 5*std::min(M, N))*2;
+  KaldiBlasInt l_work = -1;
+  Real   work_query;
+  KaldiBlasInt result;
+
+  // query for work space
+  char *u_job = const_cast<char*>(U_in ? "s" : "N");  // "s" == skinny, "N" == "none."
+  char *v_job = const_cast<char*>(V_in ? "s" : "N");  // "s" == skinny, "N" == "none."
+  clapack_Xgesvd(v_job, u_job,
+                 &M, &N, data_, &LDA,
+                 s->Data(),
+                 V->Data(), &V_stride,
+                 U->Data(), &U_stride,
+                 &work_query, &l_work,
+                 &result);
+  
+  KALDI_ASSERT(result >= 0 && "Call to CLAPACK dgesvd_ called with wrong arguments");
+
+  l_work = static_cast<KaldiBlasInt>(work_query);
+  Real *p_work;
+  void *temp;
+  if ((p_work = static_cast<Real*>(
+          KALDI_MEMALIGN(16, sizeof(Real)*l_work, &temp))) == NULL)
+    throw std::bad_alloc();
+  
+  // perform svd
+  clapack_Xgesvd(v_job, u_job,
+                 &M, &N, data_, &LDA,
+                 s->Data(),
+                 V->Data(), &V_stride,
+                 U->Data(), &U_stride,
+                 p_work, &l_work,
+                 &result);
+
+  KALDI_ASSERT(result >= 0 && "Call to CLAPACK dgesvd_ called with wrong arguments");
+
+  if (result != 0) {
+    KALDI_WARN << "CLAPACK sgesvd_ : some weird convergence not satisfied";
+  }
+  free(p_work);
+}
+
+#endif
+
+
+
 // Copy constructor.  Copies data to newly allocated memory.
 template<typename Real>
 Matrix<Real>::Matrix (const MatrixBase<Real> & M,
@@ -609,6 +695,67 @@ void MatrixBase<float>::CopyFromMat(const MatrixBase<float> & M,
 template
 void MatrixBase<double>::CopyFromMat(const MatrixBase<double> & M,
                                      MatrixTransposeType Trans);
+
+template<typename Real>
+template<typename OtherReal>
+void MatrixBase<Real>::CopyFromSp(const SpMatrix<OtherReal> & M) {
+  KALDI_ASSERT(num_rows_ == M.NumRows() && num_cols_ == num_rows_);
+  // MORE EFFICIENT IF LOWER TRIANGULAR!  Reverse code otherwise.
+  for (MatrixIndexT i = 0; i < num_rows_; i++) {
+    for (MatrixIndexT j = 0; j < i; j++) {
+      (*this)(j, i)  = (*this)(i, j) = M(i, j);
+    }
+    (*this)(i, i) = M(i, i);
+  }
+}
+
+// Instantiate this function
+template
+void MatrixBase<float>::CopyFromSp(const SpMatrix<double> & M);
+template
+void MatrixBase<double>::CopyFromSp(const SpMatrix<float> & M);
+
+
+template<typename Real>
+template<typename OtherReal>
+void MatrixBase<Real>::CopyFromTp(const TpMatrix<OtherReal> & M,
+                                  MatrixTransposeType Trans) {
+  if (Trans == kNoTrans) {
+    KALDI_ASSERT(num_rows_ == M.NumRows() && num_cols_ == num_rows_);
+    SetZero();
+    Real *out_i = data_;
+    const OtherReal *in_i = M.Data();
+    for (MatrixIndexT i = 0; i < num_rows_; i++, out_i += stride_, in_i += i) {
+      for (MatrixIndexT j = 0; j <= i; j++)
+        out_i[j] = in_i[j];
+    }
+  } else {
+    SetZero();
+    KALDI_ASSERT(num_rows_ == M.NumRows() && num_cols_ == num_rows_);
+    MatrixIndexT stride = stride_;
+    Real *out_i = data_;
+    const OtherReal *in_i = M.Data();
+    for (MatrixIndexT i = 0; i < num_rows_; i++, out_i ++, in_i += i) {
+      for (MatrixIndexT j = 0; j <= i; j++)
+        out_i[j*stride] = in_i[j];
+    }
+  }
+}
+
+template
+void MatrixBase<float>::CopyFromTp(const TpMatrix<float> & M,
+                                   MatrixTransposeType trans);
+template
+void MatrixBase<float>::CopyFromTp(const TpMatrix<double> & M,
+                                   MatrixTransposeType trans);
+template
+void MatrixBase<double>::CopyFromTp(const TpMatrix<float> & M,
+                                    MatrixTransposeType trans);
+template
+void MatrixBase<double>::CopyFromTp(const TpMatrix<double> & M,
+                                    MatrixTransposeType trans);
+
+
 
 template<typename Real>
 void MatrixBase<Real>::CopyRowsFromVec(const VectorBase<Real> &rv) {
@@ -1247,6 +1394,19 @@ void MatrixBase<Real>::AddToDiag(const Real alpha) {
 }
 
 template<typename Real>
+Real MatrixBase<Real>::Cond() const {
+  KALDI_ASSERT(num_rows_ > 0&&num_cols_ > 0);
+  Vector<Real> singular_values(std::min(num_rows_, num_cols_));
+  Svd(&singular_values);  // Get singular values...
+  Real min = singular_values(0), max = singular_values(0);  // both absolute values...
+  for (MatrixIndexT i = 1;i < singular_values.Dim();i++) {
+    min = std::min((Real)std::abs(singular_values(i)), min); max = std::max((Real)std::abs(singular_values(i)), max);
+  }
+  if (min > 0) return max/min;
+  else return std::numeric_limits<Real>::infinity();
+}
+
+template<typename Real>
 Real MatrixBase<Real>::Trace(bool check_square) const  {
   KALDI_ASSERT(!check_square || num_rows_ == num_cols_);
   Real ans = 0.0;
@@ -1312,6 +1472,74 @@ void MatrixBase<Real>::AddMatMatMat(Real alpha,
     Matrix<Real> BC(BRows, CCols);
     BC.AddMatMat(1.0, B, transB, C, transC, 0.0);  // BC = B * C.
     (*this).AddMatMat(alpha, A, transA, BC, kNoTrans, beta);
+  }
+}
+
+
+template<typename Real>
+void MatrixBase<Real>::DestructiveSvd(VectorBase<Real> *s, MatrixBase<Real> *U, MatrixBase<Real> *Vt) {
+  // Svd, *this = U*diag(s)*Vt.
+  // With (*this).num_rows_ == m, (*this).num_cols_ == n,
+  // Support only skinny Svd with m>=n (NumRows>=NumCols), and zero sizes for U and Vt mean
+  // we do not want that output.  We expect that s.Dim() == m,
+  // U is either 0 by 0 or m by n, and rv is either 0 by 0 or n by n.
+  // Throws exception on error.
+
+  KALDI_ASSERT(num_rows_>=num_cols_ && "Svd requires that #rows by >= #cols.");  // For compatibility with JAMA code.
+  KALDI_ASSERT(s->Dim() == num_cols_);  // s should be the smaller dim.
+  KALDI_ASSERT(U == NULL || (U->num_rows_ == num_rows_&&U->num_cols_ == num_cols_));
+  KALDI_ASSERT(Vt == NULL || (Vt->num_rows_ == num_cols_&&Vt->num_cols_ == num_cols_));
+
+  Real prescale = 1.0;
+  if ( std::abs((*this)(0, 0) ) < 1.0e-30) {  // Very tiny value... can cause problems in Svd.
+    Real max_elem = LargestAbsElem();
+    if (max_elem != 0) {
+      prescale = 1.0 / max_elem;
+      if (std::abs(prescale) == std::numeric_limits<Real>::infinity()) { prescale = 1.0e+40; }
+      (*this).Scale(prescale);
+    }
+  }
+
+#if !defined(HAVE_ATLAS) && !defined(USE_KALDI_SVD)
+  // "S" == skinny Svd (only one we support because of compatibility with Jama one which is only skinny),
+  // "N"== no eigenvectors wanted.
+  LapackGesvd(s, U, Vt);
+#else
+  /*  if (num_rows_ > 1 && num_cols_ > 1 && (*this)(0, 0) == (*this)(1, 1)
+      && Max() == Min() && (*this)(0, 0) != 0.0) { // special case that JamaSvd sometimes crashes on.
+      KALDI_WARN << "Jama SVD crashes on this type of matrix, perturbing it to prevent crash.";
+      for(int32 i = 0; i < NumRows(); i++)
+      (*this)(i, i)  *= 1.00001;
+      }*/
+  bool ans = JamaSvd(s, U, Vt);
+  if (Vt != NULL) Vt->Transpose();  // possibly to do: change this and also the transpose inside the JamaSvd routine.  note, Vt is square.
+  if (!ans) {
+    KALDI_ERR << "Error doing Svd";  // This one will be caught.
+  }
+#endif
+  if (prescale != 1.0) s->Scale(1.0/prescale);
+}
+
+template<typename Real>
+void MatrixBase<Real>::Svd(VectorBase<Real> *s, MatrixBase<Real> *U, MatrixBase<Real> *Vt) const {
+  try {
+    if (num_rows_ >= num_cols_) {
+      Matrix<Real> tmp(*this);
+      tmp.DestructiveSvd(s, U, Vt);
+    } else {
+      Matrix<Real> tmp(*this, kTrans);  // transpose of *this.
+      // rVt will have different dim so cannot transpose in-place --> use a temp matrix.
+      Matrix<Real> Vt_Trans(Vt ? Vt->num_cols_ : 0, Vt ? Vt->num_rows_ : 0);
+      // U will be transpose
+      tmp.DestructiveSvd(s, Vt ? &Vt_Trans : NULL, U);
+      if (U) U->Transpose();
+      if (Vt) Vt->CopyFromMat(Vt_Trans, kTrans);  // copy with transpose.
+    }
+  } catch (...) {
+    KALDI_ERR << "Error doing Svd (did not converge), first part of matrix is\n"
+              << SubMatrix<Real>(*this, 0, std::min((MatrixIndexT)10, num_rows_),
+                                 0, std::min((MatrixIndexT)10, num_cols_))
+              << ", min and max are: " << Min() << ", " << Max(); 
   }
 }
 

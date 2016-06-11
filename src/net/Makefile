@@ -7,9 +7,9 @@ include ../config.mk
 LDFLAGS += $(CUDA_LDFLAGS)
 LDLIBS += $(CUDA_LDLIBS)
 
-TESTFILES = 
+TESTFILES = nnet-precondition-online-test.o
 
-OBJFILES = net.o layer.o ce-loss.o ctc-loss.o class-prior.o
+OBJFILES = net.o layer.o ce-loss.o ctc-loss.o class-prior.o nnet-precondition.o nnet-precondition-online.o 
 
 LIBNAME = net
 

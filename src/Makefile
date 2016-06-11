@@ -8,12 +8,12 @@ SHELL := /bin/bash
 SUBDIRS = base cpucompute util feat \
           fstext lm decoder lat gpucompute net \
           fstbin featbin \
-          netbin decoderbin
+          netbin decoderbin thread
 
 MEMTESTDIRS = base cpucompute util feat \
           fstext lm decoder lat net \
           fstbin featbin \
-          netbin decoderbin
+          netbin decoderbin thread
 
 CUDAMEMTESTDIR = gpucompute
 

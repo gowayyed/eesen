@@ -14,7 +14,7 @@ LDLIBS += $(CUDA_LDLIBS)
 TESTFILES =
 
 
-OBJFILES = cuda-device.o cuda-math.o cuda-matrix.o cuda-vector.o cuda-common.o cuda-rand.o
+OBJFILES = cuda-device.o cuda-math.o cuda-matrix.o cuda-vector.o cuda-common.o cuda-rand.o cuda-sp-matrix.o cuda-packed-matrix.o
 ifeq ($(CUDA), true)
   OBJFILES += cuda-kernels.o cuda-randkernels.o
 endif

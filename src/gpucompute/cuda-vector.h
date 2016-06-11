@@ -44,6 +44,8 @@ class CuVectorBase {
   friend class CuVectorBase<float>;
   friend class CuVectorBase<double>;
   friend class CuMatrixBase<Real>;
+	friend class CuSpMatrix<Real>;
+	friend class CuTpMatrix<Real>;
   friend class MatrixBase<Real>;
 
   template <typename OtherReal>
@@ -70,6 +72,14 @@ class CuVectorBase {
 
   template<typename OtherReal>
   void CopyFromVec(const VectorBase<OtherReal> &src);
+
+
+	
+  /// Add the diagonal of a matrix times itself:
+  /// *this = diag(M M^T) +  beta * *this (if trans == kNoTrans), or
+  /// *this = diag(M^T M) +  beta * *this (if trans == kTrans).
+  void AddDiagMat2(Real alpha, const CuMatrixBase<Real> &M,
+                   MatrixTransposeType trans, Real beta);
 
 
   template<typename OtherReal>
@@ -137,6 +147,13 @@ class CuVectorBase {
                           static_cast<UnsignedMatrixIndexT>(dim_));
     return CuValue<Real>(data_ + i); // will be casted to Real.
   }
+
+	/// Extracts the diagonal of a packed matrix M; works for Sp or Tp.
+  void CopyDiagFromPacked(const CuPackedMatrix<Real> &M);
+
+  /// Extracts the diagonal of a matrix.
+  void CopyDiagFromMat(const CuMatrix<Real> &M);	
+
 
   /// Returns the maximum value of any element, or -infinity for the empty vector.  
   Real Max() const;

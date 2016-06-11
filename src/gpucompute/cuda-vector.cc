@@ -11,11 +11,52 @@
 #include "gpucompute/cuda-randkernels-wrappers.h"
 #include "gpucompute/cuda-math.h"
 #include "gpucompute/cuda-vector.h"
+#include "gpucompute/cuda-packed-matrix.h"
 #include "gpucompute/cuda-matrix.h"
 #include "gpucompute/cuda-rand.h"
 #include "gpucompute/cublas-wrappers.h"
 
 namespace eesen {
+
+
+template<typename Real>
+Real VecVec(const CuVectorBase<Real> &a,
+            const CuVectorBase<Real> &b) {
+  //MatrixIndexT a_dim = a.Dim();
+  KALDI_ASSERT(a.Dim() == b.Dim());
+  Real result = 0;
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {    
+    Timer tim;
+
+    result = cublas_dot(a.Dim(), a.Data(), 1, b.Data(), 1);
+
+    CU_SAFE_CALL(cublasGetError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+} else
+#endif
+  {
+    result = VecVec(a.Vec(), b.Vec());
+  }
+  return result;
+}
+// instantiate the template above
+template float VecVec(const CuVectorBase<float> &a, const CuVectorBase<float> &b);
+template double VecVec(const CuVectorBase<double> &a, const CuVectorBase<double> &b);
+
+// The version of VecVec that can do type conversion.  For now we give this a
+// stupid implementation that converts one of the vectors.  If it ever becomes
+// an efficiency bottleneck, we can revisit this.
+template<typename Real, typename OtherReal>
+Real VecVec(const CuVectorBase<Real> &A, const CuVectorBase<OtherReal> &B) {
+  CuVector<Real> B2(B);
+  return VecVec(A, B2); // This will call the single-parameter template.
+}
+// instantiate the template above
+template float VecVec(const CuVectorBase<float> &A, const CuVectorBase<double> &B);
+template double VecVec(const CuVectorBase<double> &A, const CuVectorBase<float> &B);
+
+
 
 template<typename Real>
 void CuVectorBase<Real>::CopyRowsFromMat(const CuMatrixBase<Real> &mat) {
@@ -339,6 +380,23 @@ void CuVectorBase<Real>::AddVecVec(Real alpha, const CuVectorBase<Real> &v,
     Vec().AddVecVec(alpha, v.Vec(), r.Vec(), beta);
   }
 }
+
+template<typename Real>
+void CuVectorBase<Real>::AddDiagMat2(Real alpha, const CuMatrixBase<Real> &M,
+                                     MatrixTransposeType trans, Real beta) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    if (dim_ == 0) return;
+    MatrixTransposeType other_trans = (trans == kTrans ? kNoTrans : kTrans);
+    this->AddDiagMatMat(alpha, M, trans,
+                        M, other_trans, beta);
+  } else
+#endif
+  {
+    Vec().AddDiagMat2(alpha, M.Mat(), trans, beta);
+  }      
+}
+
 
 template<typename Real>
 void CuVectorBase<Real>::AddDiagMatMat(
@@ -753,6 +811,46 @@ void CuVectorBase<Real>::Add(Real value) {
     Vec().Add(value);
   }
 }
+
+
+template<typename Real>
+void CuVectorBase<Real>::CopyDiagFromPacked(const CuPackedMatrix<Real> &M) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    KALDI_ASSERT(dim_ == M.NumRows());
+    if (dim_ == 0) return;
+    Timer tim;
+    int dimBlock(CU1DBLOCK);
+    int dimGrid(n_blocks(Dim(), CU1DBLOCK));
+    cuda_vec_copy_diag_from_packed(dimGrid, dimBlock, data_, M.Data(), dim_);
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Vec().CopyDiagFromPacked(M.Mat());
+  }
+}
+
+
+template<typename Real>
+void CuVectorBase<Real>::CopyDiagFromMat(const CuMatrix<Real> &M) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    KALDI_ASSERT(dim_ == std::min(M.NumRows(), M.NumCols()));
+    Timer tim;
+    cublas_copy(dim_, M.Data(), M.Stride() + 1, data_, 1);
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Vec().CopyDiagFromMat(M.Mat());
+  }
+}
+
+
 
 template<typename Real>
 void CuVectorBase<Real>::Scale(Real value) {

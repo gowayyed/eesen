@@ -215,6 +215,11 @@ public:
 
         //  assume that the fist half of out_diff is about the forward layer
         DM.RowRange(1*S,T*S).CopyFromMat(out_diff.ColRange(0, cell_dim_));
+	
+				DGIFO.ApplyCeiling(1.0);
+        DGIFO.ApplyFloor(-1.0);
+
+
 
         for (int t = T; t >= 1; t--) {
           // variables representing activations of invidivual units/gates
@@ -270,6 +275,10 @@ public:
 //              d_all.Row(s).SetZero();            
 //          }
         }  // end of t
+
+				DGIFO.ApplyCeiling(1.0);
+        DGIFO.ApplyFloor(-1.0);
+
 
         // errors back-propagated to the inputs
         in_diff->AddMatMat(1.0, DGIFO.RowRange(1*S,T*S), kNoTrans, wei_gifo_x_fw_, kNoTrans, 0.0);
@@ -365,8 +374,8 @@ public:
 //          }
         }  // end of t
 
-//				DGIFO.ApplyCeiling(1.0);
-//				DGIFO.ApplyFloor(-1.0);
+				DGIFO.ApplyCeiling(1.0);
+				DGIFO.ApplyFloor(-1.0);
 
 				//DGIFO.Set(0);
 
