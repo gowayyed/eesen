@@ -2083,6 +2083,50 @@ double TraceMatMatMatMat(const MatrixBase<double> &A, MatrixTransposeType transA
                          const MatrixBase<double> &C, MatrixTransposeType transC,
                          const MatrixBase<double> &D, MatrixTransposeType transD);
 
+
+template<typename Real> void  SortSvd(VectorBase<Real> *s, MatrixBase<Real> *U,
+                                   MatrixBase<Real> *Vt, bool sort_on_absolute_value) {
+  /// Makes sure the Svd is sorted (from greatest to least absolute value).
+  MatrixIndexT num_singval = s->Dim();
+  KALDI_ASSERT(U == NULL || U->NumCols() == num_singval);
+  KALDI_ASSERT(Vt == NULL || Vt->NumRows() == num_singval);
+
+  std::vector<std::pair<Real, MatrixIndexT> > vec(num_singval);
+  // negative because we want revese order.
+  for (MatrixIndexT d = 0; d < num_singval; d++) {
+    Real val = (*s)(d),
+        sort_val = -(sort_on_absolute_value ? std::abs(val) : val);
+    vec[d] = std::pair<Real, MatrixIndexT>(sort_val, d);
+  }
+  std::sort(vec.begin(), vec.end());
+  Vector<Real> s_copy(*s);
+  for (MatrixIndexT d = 0; d < num_singval; d++)
+    (*s)(d) = s_copy(vec[d].second);
+  if (U != NULL) {
+    Matrix<Real> Utmp(*U);
+    MatrixIndexT dim = Utmp.NumRows();
+    for (MatrixIndexT d = 0; d < num_singval; d++) {
+      MatrixIndexT oldidx = vec[d].second;
+      for (MatrixIndexT e = 0; e < dim; e++)
+        (*U)(e, d) = Utmp(e, oldidx);
+    }
+  }
+  if (Vt != NULL) {
+    Matrix<Real> Vttmp(*Vt);
+    for (MatrixIndexT d = 0; d < num_singval; d++)
+      (*Vt).Row(d).CopyFromVec(Vttmp.Row(vec[d].second));
+  }
+}
+
+template
+void SortSvd(VectorBase<float> *s, MatrixBase<float> *U,
+             MatrixBase<float> *Vt, bool);
+
+template
+void SortSvd(VectorBase<double> *s, MatrixBase<double> *U,
+             MatrixBase<double> *Vt, bool);
+
+
 template<typename Real>
 bool AttemptComplexPower(Real *x_re, Real *x_im, Real power) {
   // Used in Matrix<Real>::Power().

@@ -42,7 +42,7 @@ namespace eesen {
 class TrainableLayer : public Layer {
  public: 
   TrainableLayer(int32 input_dim, int32 output_dim)
-    : Layer(input_dim, output_dim) { }
+    : Layer(input_dim, output_dim), ref_layer_(NULL) { }
   virtual ~TrainableLayer() { }
 
   /// Check if contains trainable parameters 
@@ -72,10 +72,15 @@ class TrainableLayer : public Layer {
   }
 
   virtual void InitData(std::istream &is) = 0;
+	
+	void SetRefLayer(const Layer& ref_layer) {
+    ref_layer_ = (dynamic_cast<const TrainableLayer*> (&ref_layer));
+  }
 
  protected:
   /// Option-class with training hyper-parameters
   NetTrainOptions opts_; 
+	const TrainableLayer* ref_layer_;
 };
 
 } // namespace eesen

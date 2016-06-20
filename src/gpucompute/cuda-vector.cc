@@ -511,6 +511,111 @@ void CuVectorBase<Real>::MulElements(const CuVectorBase<Real> &v) {
   }
 }
 
+template<typename Real>
+bool CuVectorBase<Real>::ApproxEqual(const CuVectorBase<Real> &other, float tol) const {
+  if (dim_ != other.dim_) KALDI_ERR << "ApproxEqual: size mismatch "
+                                    << dim_ << " vs. " << other.dim_;
+  KALDI_ASSERT(tol >= 0.0);
+  CuVector<Real> tmp(*this);
+  tmp.AddVec(-1.0, other);
+  BaseFloat tmp_norm = sqrt(VecVec(tmp, tmp)), this_norm = sqrt(VecVec(*this, *this));
+  return tmp_norm <= static_cast<Real>(tol) * this_norm;
+}
+
+
+template<typename Real>
+void CuVectorBase<Real>::CopyToArray(Real *v) const {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    CU_SAFE_CALL(cudaMemcpy(v, data_,
+                            dim_*sizeof(Real), cudaMemcpyDeviceToHost));
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    memcpy(v, data_, dim_*sizeof(Real));
+  }
+}
+
+template<typename Real>
+void CuVectorBase<Real>::AverageArray(const Real alpha, const Real *v, const Real beta) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) { 
+    Timer tim;
+    int32 dim = this->dim_;
+    Real *data = this->data_;
+    cuda_scal(dim, alpha, data, 1);
+    cuda_axpy(dim, beta, v, 1, data, 1);
+    CU_SAFE_CALL(cudaGetLastError());    
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    for (int32 i=0; i<dim_; i++) {
+      data_[i] = alpha * data_[i] + beta * v[i];
+    }
+  }
+}
+
+template<typename Real>
+void CuVectorBase<Real>::CopyFromArray(const Real *v) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    CU_SAFE_CALL(cudaMemcpy(data_, v,
+                            dim_*sizeof(Real), cudaMemcpyHostToDevice));
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    memcpy(data_, v, dim_*sizeof(Real));
+  }
+}
+
+template<typename Real> 
+void CuVectorBase<Real>::InvertElements() {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) { 
+    Timer tim;
+    
+    dim3 dimBlock(CU1DBLOCK, 1);
+    dim3 dimGrid(n_blocks(dim_, CU1DBLOCK));
+    MatrixDim d = {1, dim_, dim_};
+
+    cuda_invert_elements(dimGrid, dimBlock, data_, d);
+    CU_SAFE_CALL(cudaGetLastError());
+    
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Vec().InvertElements();
+  }
+}
+
+template<typename Real>
+void CuVectorBase<Real>::CopyColFromMat(const CuMatrixBase<Real> &mat, MatrixIndexT col) {
+  KALDI_ASSERT(col < mat.NumCols());
+  KALDI_ASSERT(dim_ == mat.NumRows());
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    int dimBlock(CU1DBLOCK);
+    int dimGrid(n_blocks(dim_,CU1DBLOCK));
+
+    cuda_copy_col_from_mat(dimGrid, dimBlock, data_, col, mat.Data(), mat.Dim(), dim_);
+    CU_SAFE_CALL(cudaGetLastError());    
+    CuDevice::Instantiate().AccuProfile("CuVectorBase::CopyColFromMat", tim.Elapsed());
+  } else
+#endif
+  {
+    Vec().CopyColFromMat(mat.Mat(),col);
+  }
+}
+
+
+/*
 template<>
 template<>
 void CuVectorBase<double>::CopyFromVec(const CuVectorBase<float> &src) {
@@ -550,7 +655,7 @@ void CuVectorBase<float>::CopyFromVec(const CuVectorBase<double> &src) {
     Vec().CopyFromVec(src.Vec());
   }
 }
-
+*/
 
 template<typename Real>
 template<typename OtherReal>

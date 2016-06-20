@@ -38,6 +38,8 @@ namespace eesen {
 const struct Layer::key_value Layer::kMarkerMap[] = {
   { Layer::l_Affine_Transform,"<AffineTransform>" },
 	{ Layer::l_Affine_Transform_Cond,"<AffineTransformCond>" },
+	{ Layer::l_Affine_Transform_Precond,"<AffineTransformPrecond>" },
+	{ Layer::l_Affine_Transform_Precond_Online,"<AffineTransformPrecondOnline>" },
   { Layer::l_BiLstm,"<BiLstm>"},
   { Layer::l_BiLstm_Parallel,"<BiLstmParallel>"},
   { Layer::l_Lstm,"<Lstm>"},

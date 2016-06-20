@@ -30,14 +30,22 @@ struct NetTrainOptions {
   // option declaration
   BaseFloat learn_rate;
   BaseFloat momentum;
+	BaseFloat l2_penalty;
+  BaseFloat l1_penalty;
+  bool updatable;
   // default values
   NetTrainOptions() : learn_rate(0.008),
-                      momentum(0.0)
+                      momentum(0.0),
+											l2_penalty(0.0),
+                      l1_penalty(0.0),
+                      updatable(true)
                       {}
   // register options
   void Register(OptionsItf *po) {
     po->Register("learn-rate", &learn_rate, "Learning rate");
     po->Register("momentum", &momentum, "Momentum");
+    po->Register("l2-penalty", &l2_penalty, "L2 penalty (weight decay)");
+    po->Register("l1-penalty", &l1_penalty, "L1 penalty (promote sparsity)");
   }
   // print for debug purposes
   friend std::ostream& operator<<(std::ostream& os, const NetTrainOptions& opts) {

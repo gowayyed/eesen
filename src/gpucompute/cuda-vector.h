@@ -85,6 +85,20 @@ class CuVectorBase {
   template<typename OtherReal>
   void CopyToVec(VectorBase<OtherReal> *dst) const;
   
+	
+  /// data_ = alpha * data_ + beta * v
+  void AverageArray(const Real alpha, const Real *v, const Real Beta);
+
+	void CopyToArray(Real *v) const;
+
+	
+  /// Copy from CPU array
+  void CopyFromArray(const Real *v);
+
+	 void CopyColFromMat(const CuMatrixBase<Real> &mat, MatrixIndexT col);
+
+	void InvertElements(); 
+
   void CopyRowsFromMat(const CuMatrixBase<Real> &M);
 
   void CopyRowsFromMat(const MatrixBase<Real> &M);
@@ -99,6 +113,9 @@ class CuVectorBase {
 
   template<typename OtherReal>
   void AddVec(Real alpha, const CuVectorBase<OtherReal> &vec, Real beta = 1.0);
+
+
+	 bool ApproxEqual(const CuVectorBase<Real> &other, float tol = 0.01) const;
 
   /// Sum the rows of the matrix, add to vector
   void AddRowSumMat(Real alpha, const CuMatrixBase<Real> &mat, Real beta = 1.0);

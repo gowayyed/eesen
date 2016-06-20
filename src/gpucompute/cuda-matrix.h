@@ -54,6 +54,7 @@ class CuMatrixBase {
   friend class CuSubMatrix<Real>;
 	friend class CuSpMatrix<Real>;
 	friend class CuTpMatrix<Real>;
+	friend class CuBlockMatrix<Real>;
   friend class CuRand<Real>;
   friend class CuSubVector<Real>;
   friend void cu::RegularizeL1<Real>(CuMatrixBase<Real> *weight,
@@ -104,6 +105,12 @@ class CuMatrixBase {
     return d; 
   }
 
+
+	bool IsUnit(Real tol = 0.001) const;  
+
+  /// True if ((*this)-other).FrobeniusNorm() <= tol * this->FrobeniusNorm()
+  bool ApproxEqual(const CuMatrixBase<Real> &other, float tol = 0.01) const;	
+
   /////////////////////////////////////////////////////
   /// Various copy functions
   /////////////////////////////////////////////////////
@@ -143,6 +150,12 @@ class CuMatrixBase {
   void ApplyLog();
   /// Sum of the matrix
   Real Sum() const;
+
+  /// Return the trace. If check_square = true, will crash if matrix is not square.
+  Real Trace(bool check_square = true) const;	
+
+	 Real FrobeniusNorm() const { return sqrt(TraceMatMat(*this, *this, kTrans)); }
+
   /// If the elements < floor_val, set them to floor_val
   void ApplyFloor(Real floor_val);
   /// If the elements > ceiling_val, set them to ceiling_val
@@ -155,6 +168,19 @@ class CuMatrixBase {
   void SetRandUniform();
   /// Set to random values drawn from a uniform distribution [-range, range]
   void InitRandUniform(Real range);
+
+  /// data_ = alpha * data_ + beta * v
+  void AverageArray(const Real alpha, const Real *v, const Real beta);
+
+	void CopyToArray(Real *v) const;
+
+	
+  /// Copy from CPU array
+  void CopyFromArray(const Real *v);
+
+	/// invert the matrix by elements.
+  void InvertElements();	
+	
 
   /////////////////////////////////////////////////////
   /////  Activation
@@ -178,6 +204,14 @@ class CuMatrixBase {
   /// tanh output.  *this = diff * (1 - value^2).
   void DiffTanh(const CuMatrixBase<Real> &value,
                 const CuMatrixBase<Real> &diff);
+
+	/// This function does sets *this to the Cholesky factor of *this (i.e.  the C
+  /// satisfying *this = C C^T), and sets "inv_cholesky" (if supplied) to its
+  /// inverse.  *this is treated as a symmetric matrix but only the lower triangle
+  /// is accessed.
+  void Cholesky(CuMatrixBase<Real> *inv_cholesky = NULL);	
+
+
 
 
   /////////////////////////////////////////////////////
@@ -445,6 +479,8 @@ class CuMatrix: public CuMatrixBase<Real> {
     this->CopyFromMat(other);
     return *this;
   }
+
+	 void Transpose();
 
   /// Allocate the memory
   void Resize(MatrixIndexT rows, MatrixIndexT cols,

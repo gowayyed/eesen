@@ -50,7 +50,9 @@ class MatrixBase {
   friend class CuMatrixBase<Real>;
   friend class CuMatrix<Real>;
   friend class CuSubMatrix<Real>;
-
+	friend class CuPackedMatrix<Real>;
+  
+  friend class PackedMatrix<Real>;
   /// Returns number of rows (or zero for emtpy matrix).
   inline MatrixIndexT  NumRows() const { return num_rows_; }
 
@@ -878,6 +880,18 @@ Real TraceMatMatMatMat(const MatrixBase<Real> &A, MatrixTransposeType transA,
 
 /// \addtogroup matrix_funcs_misc
 /// @{
+
+
+/// Function to ensure that SVD is sorted.  This function is made as generic as
+/// possible, to be applicable to other types of problems.  s->Dim() should be
+/// the same as U->NumCols(), and we sort s from greatest to least absolute
+/// value (if sort_on_absolute_value == true) or greatest to least value
+/// otherwise, moving the columns of U, if it exists, and the rows of Vt, if it
+/// exists, around in the same way.  Note: the "absolute value" part won't matter
+/// if this is an actual SVD, since singular values are non-negative.
+template<typename Real> void SortSvd(VectorBase<Real> *s, MatrixBase<Real> *U,
+                                     MatrixBase<Real>* Vt = NULL,
+                                     bool sort_on_absolute_value = true);
 
 
 /// The following function is used in Matrix::Power, and separately tested, so we
