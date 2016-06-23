@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
       for ( ; !feature_reader.Done(); feature_reader.Next()) {
         std::string utt = feature_reader.Key();
         // Check that we have targets
-        KALDI_LOG << "processing utterance " << utt;
+        // KALDI_LOG << "processing utterance " << utt;
         if (!targets_reader.HasKey(utt)) {
           KALDI_WARN << utt << ", missing targets";
           num_no_tgt_mat++;

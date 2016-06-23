@@ -4,7 +4,7 @@
            ## This relates to the queue.
 . ./path.sh
 
-stage=3
+stage=2
 wsj0=/path/to/LDC93S6B
 wsj1=/path/to/LDC94S13B
 
@@ -62,7 +62,7 @@ if [ $stage -le 3 ]; then
   lstm_layer_num=4     # number of LSTM layers
   lstm_cell_dim=320    # number of memory cells in every LSTM layer
 
-  dir=exp/train_phn_l${lstm_layer_num}_c${lstm_cell_dim}
+  dir=$PROJECTS/exp/wsj_train_phn_l${lstm_layer_num}_c${lstm_cell_dim}
   mkdir -p $dir
 
   target_num=`cat data/local/dict_phn/units.txt | wc -l`; target_num=$[$target_num+1]; # the number of targets 
@@ -78,7 +78,7 @@ if [ $stage -le 3 ]; then
 
   # Train the network with CTC. Refer to the script for details about the arguments
   steps/train_ctc_parallel_h.sh --add-deltas true --num-sequence 10 --frame-num-limit 25000 \
-    --learn-rate 0.00004 --report-step 1000 --nj 3 \
+    --learn-rate 0.00004 --report-step 1000 --nj 2 \
     data/train_tr95 data/train_cv05 $dir || exit 1;
 
   echo =====================================================================

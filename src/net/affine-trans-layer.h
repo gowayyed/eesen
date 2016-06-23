@@ -67,6 +67,7 @@ class AffineTransform : public TrainableLayer {
  
   void InitData(std::istream &is) {
     // define options
+    float param_range = 0.02;
     float bias_mean = -2.0, bias_range = 2.0, param_stddev = 0.1;
     float learn_rate_coef = 1.0, bias_learn_rate_coef = 1.0;
     float max_norm = 0.0;
@@ -74,7 +75,8 @@ class AffineTransform : public TrainableLayer {
     std::string token; 
     while (!is.eof()) {
       ReadToken(is, false, &token); 
-      /**/ if (token == "<ParamStddev>") ReadBasicType(is, false, &param_stddev);
+			/**/ if (token == "<ParamRange>") ReadBasicType(is, false, &param_range);
+      else if (token == "<ParamStddev>") ReadBasicType(is, false, &param_stddev);
       else if (token == "<BiasMean>")    ReadBasicType(is, false, &bias_mean);
       else if (token == "<BiasRange>")   ReadBasicType(is, false, &bias_range);
       else if (token == "<LearnRateCoef>") ReadBasicType(is, false, &learn_rate_coef);
@@ -472,6 +474,7 @@ class AffineTransformPreconditioned: public AffineTransform {
   
   void InitData(std::istream &is) {
     // define options
+    float param_range = 0.02;
     float bias_mean = -2.0, bias_range = 2.0, param_stddev = 0.1;
     float learn_rate_coef = 1.0, bias_learn_rate_coef = 1.0;
     float max_norm = 0.0;
@@ -480,7 +483,8 @@ class AffineTransformPreconditioned: public AffineTransform {
     std::string token; 
     while (!is.eof()) {
       ReadToken(is, false, &token); 
-      /**/ if (token == "<ParamStddev>") ReadBasicType(is, false, &param_stddev);
+			/**/ if (token == "<ParamRange>") ReadBasicType(is, false, &param_range);
+      else if (token == "<ParamStddev>") ReadBasicType(is, false, &param_stddev);
       else if (token == "<BiasMean>")    ReadBasicType(is, false, &bias_mean);
       else if (token == "<BiasRange>")   ReadBasicType(is, false, &bias_range);
       else if (token == "<LearnRateCoef>") ReadBasicType(is, false, &learn_rate_coef);

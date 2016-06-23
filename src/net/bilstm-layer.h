@@ -424,7 +424,7 @@ public:
 //					 DGIFO.ApplyFloor(-1.0);
 //          DGIFO.ApplyCeiling(1.0);
 
-					 DGIFO.Set(0);
+//					 DGIFO.Set(0);
           // the second half of the error vector corresponds to the backward layer
           DM.RowRange(1,T).CopyFromMat(out_diff.ColRange(cell_dim_, cell_dim_));
 
@@ -477,7 +477,7 @@ public:
             DG_t.DiffTanh(YG_t, DG_t);
           }  // end of t
 
-					DGIFO.Set(0);
+//					DGIFO.Set(0);
 //          DGIFO.ApplyCeiling(1.0);
 
           // errors back-propagated to the inputs 
