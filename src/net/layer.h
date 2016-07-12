@@ -56,6 +56,7 @@ class Layer {
 		l_Logistic_Affine,
     l_BiLstm,
     l_BiLstm_Parallel,
+		l_BiLstm_Parallel_Preconditioned,
     l_Lstm,
     l_Lstm_Parallel,
 

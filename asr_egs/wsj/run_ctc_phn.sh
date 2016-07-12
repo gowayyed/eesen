@@ -1,10 +1,11 @@
 #!/bin/bash
 
+
 . ./cmd.sh ## You'll want to change cmd.sh to something that will work on your system.
            ## This relates to the queue.
 . ./path.sh
 
-stage=2
+stage=3
 wsj0=/path/to/LDC93S6B
 wsj1=/path/to/LDC94S13B
 

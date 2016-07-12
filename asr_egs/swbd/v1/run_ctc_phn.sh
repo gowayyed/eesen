@@ -4,7 +4,7 @@
            ## This relates to the queue.
 . path.sh
 
-stage=1
+stage=4
 
 # Set paths to various datasets
 swbd=/path/to/LDC97S62
@@ -67,13 +67,13 @@ if [ $stage -le 2 ]; then
   # Finally the full training set, around 286 hours
   local/remove_dup_utts.sh 300 data/train_nodev data/train_nodup
 fi
-
+if false ; then
 if [ $stage -le 3 ]; then
   echo =====================================================================
   echo "                Network Training with the 110-Hour Set             "
   echo =====================================================================
   # Specify network structure and generate the network topology
-  input_feat_dim=120   # dimension of the input features; we will use 40-dimensional fbanks with deltas and double deltas
+  input_feat_dim=129   # dimension of the input features; we will use 40-dimensional fbanks with deltas and double deltas
   lstm_layer_num=4     # number of LSTM layers
   lstm_cell_dim=320    # number of memory cells in every LSTM layer
 
@@ -105,16 +105,17 @@ if [ $stage -le 3 ]; then
       data/lang_phn_${lm_suffix} data/eval2000 $dir/decode_eval2000_${lm_suffix} || exit 1;
   done
 fi
-
+fi
 if [ $stage -le 4 ]; then
   echo =====================================================================
   echo "                  Network Training with the Full Set               "
   echo =====================================================================
-  input_feat_dim=120   # dimension of the input features; we will use 40-dimensional fbanks with deltas and double deltas
+  input_feat_dim=129   # dimension of the input features; we will use 40-dimensional fbanks with deltas and double deltas
+#	input_feat_dim=`feat-to-dim scp:data/train_nodup/feats.scp  ark,t:|head -n 1|cut -f 2 -d " "`
   lstm_layer_num=5     # number of LSTM layers
   lstm_cell_dim=320    # number of memory cells in every LSTM layer
 
-  dir=exp/train_phn_l${lstm_layer_num}_c${lstm_cell_dim}
+  dir=$PROJECTS/exp/swbd_train_phn_nj1_l${lstm_layer_num}_c${lstm_cell_dim}
   mkdir -p $dir
 
   target_num=`cat data/lang_phn/units.txt | wc -l`; target_num=$[$target_num+1]; # #targets = #labels + 1 (the blank)
@@ -130,7 +131,7 @@ if [ $stage -le 4 ]; then
 
   # Train the network with CTC. Refer to the script for details about the arguments
   steps/train_ctc_parallel.sh --add-deltas true --num-sequence 20 --frame-num-limit 25000 \
-    --learn-rate 0.00004 --report-step 1000 --halving-after-epoch 12 \
+    --learn-rate 0.00004 --report-step 1000 --halving-after-epoch 12 --feats-tmpdir $dir/XXXXX \
     data/train_nodup data/train_dev $dir || exit 1;
 
   echo =====================================================================

@@ -56,6 +56,10 @@ if __name__ == '__main__':
     --fgate-bias-init : float
         Initial value of the forget-gate bias. Not specifying this option means the forget-gate bias
         will be initialized randomly, in the same way as the other parameters. 
+		--preconditioned : string
+				"yes" if you want to make the affined (for now) preconditioned
+		--preconditioned-bilstm : string
+        "yes" if you want to make the bilsm preconditioned
 
     """
 
@@ -75,8 +79,10 @@ if __name__ == '__main__':
     param_range='0.1'
     if arguments.has_key('param_range'):
         param_range = arguments['param_range']
-
-    model_type = '<BiLstmParallel>'   # by default
+    if 'preconditioned-bilstm' in arguments.keys() and arguments['preconditioned-bilstm'] == 'yes':
+      model_type = '<BiLstmParallelPreconditioned>'
+    else:
+      model_type = '<BiLstmParallel>'   # by default
     if arguments.has_key('lstm_type') and arguments['lstm_type'] == 'uni':
         model_type = '<LstmParallel>'
 
@@ -97,7 +103,10 @@ if __name__ == '__main__':
     for n in range(1, lstm_layer_num):
          print model_type + ' <InputDim> ' + str(actual_cell_dim) + ' <CellDim> ' + str(actual_cell_dim) + lstm_comm
     # the final affine-transform and softmax layer
-    print '<AffineTransform> <InputDim> ' + str(actual_cell_dim) + ' <OutputDim> ' + str(target_num) + ' <ParamRange> ' + param_range
+    if 'preconditioned' in arguments.keys() and arguments['preconditioned'] == 'yes':
+      print '<AffineTransformPrecond> <InputDim> ' + str(actual_cell_dim) + ' <OutputDim> ' + str(target_num) + ' <ParamRange> ' + param_range
+    else:
+      print '<AffineTransform> <InputDim> ' + str(actual_cell_dim) + ' <OutputDim> ' + str(target_num) + ' <ParamRange> ' + param_range
 		
     if arguments.has_key('block_softmax_dims') and arguments['block_softmax_dims'] != "":
 			ddims = map(int, re.split("[,:]", arguments['block_softmax_dims']))

@@ -214,7 +214,10 @@ void Vector<Real>::Resize(const MatrixIndexT dim, MatrixResizeType resize_type) 
 /// Copy data from another vector
 template<typename Real>
 void VectorBase<Real>::CopyFromVec(const VectorBase<Real> &v) {
-  KALDI_ASSERT(Dim() == v.Dim());
+  //KALDI_ASSERT(Dim() == v.Dim());
+	//KALDI_LOG << Dim();
+	//KALDI_LOG << v.Dim();
+	KALDI_ASSERT(Dim() == v.Dim());
   if (data_ != v.data_) {
     std::memcpy(this->data_, v.data_, dim_ * sizeof(Real));
   }
@@ -231,7 +234,9 @@ void VectorBase<Real>::CopyFromPtr(const Real *data, MatrixIndexT sz) {
 template<typename Real>
 template<typename OtherReal>
 void VectorBase<Real>::CopyFromVec(const VectorBase<OtherReal> &other) {
-  KALDI_ASSERT(dim_ == other.Dim());
+	KALDI_LOG << Dim();
+  KALDI_LOG << other.Dim();
+	KALDI_ASSERT(Dim() == other.Dim());
   Real * __restrict__  ptr = data_;
   const OtherReal * __restrict__ other_ptr = other.Data();
   for (MatrixIndexT i = 0; i < dim_; i++)
