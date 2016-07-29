@@ -79,7 +79,7 @@ if __name__ == '__main__':
     param_range='0.1'
     if arguments.has_key('param_range'):
         param_range = arguments['param_range']
-    if 'preconditioned-bilstm' in arguments.keys() and arguments['preconditioned-bilstm'] == 'yes':
+    if 'preconditioned_bilstm' in arguments.keys() and arguments['preconditioned_bilstm'] == 'yes':
       model_type = '<BiLstmParallelPreconditioned>'
     else:
       model_type = '<BiLstmParallel>'   # by default

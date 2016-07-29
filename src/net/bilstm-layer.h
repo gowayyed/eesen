@@ -99,7 +99,12 @@ public:
         ExpectToken(is, binary, "<MaxGrad>");
         ReadBasicType(is, binary, &max_grad_);
       }
-
+			// temporory addition of DropFactor TODO get the dropout from eesen repository
+			float drop_factor = 0.0;
+			if ('<' == Peek(is, binary)) {
+        ExpectToken(is, binary, "<DropFactor>");
+        ReadBasicType(is, binary, &drop_factor);
+			}
       // read parameters of forward layer
       wei_gifo_x_fw_.Read(is, binary);
       wei_gifo_m_fw_.Read(is, binary);

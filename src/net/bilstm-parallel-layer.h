@@ -525,24 +525,35 @@ public:
         
         CuMatrix<BaseFloat> in_precon(0, 0, kUndefined);
         CuMatrix<BaseFloat> out_precon(0, 0, kUndefined);
+				//KALDI_LOG << "A";
+			  //KALDI_LOG << "A in.NumCols() " << in.NumCols();
+        //KALDI_LOG << "A in_precon.NumCols() " << in_precon.NumCols();
 
         Precondition(in, DGIFO.RowRange(1*S, T*S), alpha_, &in_precon, &out_precon);
+				//KALDI_LOG << "B";
+			//	KALDI_LOG << "B in.NumCols() " << in.NumCols();
+        //KALDI_LOG << "B in_precon.NumCols() " << in_precon.NumCols();
+
         wei_gifo_x_fw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
-
+//				KALDI_LOG << "C";
+	//		  KALDI_LOG << "C in.NumCols() " << in.NumCols();
+    //    KALDI_LOG << "C in_precon.NumCols() " << in_precon.NumCols();
         Precondition(YM.RowRange(0*S,T*S), DGIFO.RowRange(1*S, T*S), alpha_, &in_precon, &out_precon);	
-        wei_gifo_m_fw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+			//	KALDI_LOG << "D in.NumCols() " << in.NumCols();
+			//	KALDI_LOG << "D in_precon.NumCols() " << in_precon.NumCols();
+        wei_gifo_m_fw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 				// TODO check which precon to use for this bias, for now I will just leave the nonpreconditioned part
-
+			//	KALDI_LOG << "E";
         bias_fw_corr_.AddRowSumMat(1.0, DGIFO.RowRange(1*S, T*S), mmt);
 
         Precondition(YC.RowRange(0*S, T*S), DI.RowRange(1*S, T*S), alpha_, &in_precon, &out_precon);
-        phole_i_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_i_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         Precondition(YC.RowRange(0*S, T*S), DF.RowRange(1*S, T*S), alpha_, &in_precon, &out_precon);
-        phole_f_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_f_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         Precondition(YC.RowRange(1*S, T*S), DO.RowRange(1*S, T*S), alpha_, &in_precon, &out_precon);
-        phole_o_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_o_c_fw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
       }   
         
      // back-propagation in the backward layer
@@ -632,21 +643,21 @@ public:
         CuMatrix<BaseFloat> out_precon(0, 0, kUndefined);
 
         Precondition(in, DGIFO.RowRange(1*S,T*S), alpha_, &in_precon, &out_precon);
-        wei_gifo_x_bw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        wei_gifo_x_bw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         Precondition(YM.RowRange(2*S,T*S), DGIFO.RowRange(1*S,T*S), alpha_, &in_precon, &out_precon); 
-        wei_gifo_m_bw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        wei_gifo_m_bw_corr_.AddMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         bias_bw_corr_.AddRowSumMat(1.0, DGIFO.RowRange(1*S,T*S), mmt);
 
         Precondition(YC.RowRange(2*S,T*S), DI.RowRange(1*S,T*S), alpha_, &in_precon, &out_precon);
-        phole_i_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_i_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         Precondition(YC.RowRange(2*S,T*S), DF.RowRange(1*S,T*S), alpha_, NULL, &out_precon); // IMP order of execution matters here
-        phole_f_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_f_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
 
         Precondition(YC.RowRange(1*S,T*S), DO.RowRange(1*S,T*S), alpha_, &in_precon, &out_precon);
-        phole_o_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in.NumCols()), kNoTrans, mmt);
+        phole_o_c_bw_corr_.AddDiagMatMat(1.0, out_precon, kTrans, in_precon.ColRange(0, in_precon.NumCols()-1), kNoTrans, mmt);
       } 
     }
 

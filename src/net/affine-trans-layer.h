@@ -116,6 +116,7 @@ class AffineTransform : public TrainableLayer {
     if ('<' == Peek(is, binary)) {
       ExpectToken(is, binary, "<LearnRateCoef>");
       ReadBasicType(is, binary, &learn_rate_coef_);
+			// TODO clean this
       ExpectToken(is, binary, "<BiasLearnRateCoef>");
       ReadBasicType(is, binary, &bias_learn_rate_coef_);
     }

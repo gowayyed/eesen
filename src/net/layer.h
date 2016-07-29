@@ -163,7 +163,7 @@ class Layer {
 };
 
 inline bool IsLstmType(std::string layer_type_string) {
-  if (layer_type_string == "<BiLstm>" || layer_type_string == "<Lstm>" || layer_type_string == "<BiLstmParallel>" || layer_type_string == "<LstmParallel>" ) {
+  if (layer_type_string == "<BiLstm>" || layer_type_string == "<Lstm>" || layer_type_string == "<BiLstmParallel>" || layer_type_string == "<LstmParallel>" || layer_type_string == "<BiLstmParallelPreconditioned>") {
     return true;
   }
   return false;
