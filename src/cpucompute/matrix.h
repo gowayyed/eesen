@@ -634,7 +634,7 @@ class Matrix : public MatrixBase<Real> {
                 const MatrixBase<Real>& B, MatrixTransposeType transB,
                 const Real beta) {
     Matrix<Real> M(A);
-    return AddMatMat(alpha, M, kNoTrans, B, transB, beta);
+    return this->AddMatMat(alpha, M, kNoTrans, B, transB, beta);
   }	
 
 	/// this <-- beta*this + alpha*A*B.
@@ -643,7 +643,7 @@ class Matrix : public MatrixBase<Real> {
                 const MatrixBase<Real>& B, MatrixTransposeType transB,
                 const Real beta) {
     Matrix<Real> M(A);
-    return AddMatMat(alpha, M, transA, B, transB, beta);
+    return this->AddMatMat(alpha, M, transA, B, transB, beta);
   }
   /// this <-- beta*this + alpha*A*B.
   void AddMatSp(const Real alpha,
@@ -651,7 +651,7 @@ class Matrix : public MatrixBase<Real> {
                 const SpMatrix<Real>& B,
                 const Real beta) {
     Matrix<Real> M(B);
-    return AddMatMat(alpha, A, transA, M, kNoTrans, beta);
+    return this->AddMatMat(alpha, A, transA, M, kNoTrans, beta);
   }
   /// this <-- beta*this + alpha*A*B*C.
   void AddSpMatSp(const Real alpha,
@@ -660,7 +660,7 @@ class Matrix : public MatrixBase<Real> {
                   const SpMatrix<Real>& C,
                 const Real beta) {
     Matrix<Real> M(A), N(C);
-    return AddMatMatMat(alpha, M, kNoTrans, B, transB, N, kNoTrans, beta);
+    return this->AddMatMatMat(alpha, M, kNoTrans, B, transB, N, kNoTrans, beta);
   }
   /// this <-- beta*this + alpha*A*B.
   void AddMatTp(const Real alpha,
@@ -668,7 +668,7 @@ class Matrix : public MatrixBase<Real> {
                 const TpMatrix<Real>& B, MatrixTransposeType transB,
                 const Real beta) {
     Matrix<Real> M(B);
-    return AddMatMat(alpha, A, transA, M, transB, beta);
+    return this->AddMatMat(alpha, A, transA, M, transB, beta);
   }
 
   /// this <-- beta*this + alpha*A*B.
@@ -677,7 +677,7 @@ class Matrix : public MatrixBase<Real> {
                const TpMatrix<Real>& B, MatrixTransposeType transB,
                const Real beta) {
     Matrix<Real> M(A), N(B);
-    return AddMatMat(alpha, M, transA, N, transB, beta);
+    return this->AddMatMat(alpha, M, transA, N, transB, beta);
   }
 
   /// this <-- beta*this + alpha*A*B.
