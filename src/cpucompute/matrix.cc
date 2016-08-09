@@ -24,6 +24,7 @@
 #include "cpucompute/cblas-wrappers.h"
 #include "cpucompute/compressed-matrix.h"
 #include "cpucompute/sp-matrix.h"
+#include "cpucompute/jama-svd.h"
 
 namespace eesen {
 
