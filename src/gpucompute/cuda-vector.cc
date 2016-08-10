@@ -614,7 +614,7 @@ void CuVectorBase<Real>::CopyColFromMat(const CuMatrixBase<Real> &mat, MatrixInd
   }
 }
 
-/*
+
 template<>
 template<>
 void CuVectorBase<double>::CopyFromVec(const CuVectorBase<float> &src) {
@@ -655,7 +655,7 @@ void CuVectorBase<float>::CopyFromVec(const CuVectorBase<double> &src) {
   }
 }
 
-*/
+
 
 template<typename Real>
 template<typename OtherReal>
@@ -682,10 +682,10 @@ void CuVectorBase<Real>::CopyFromVec(const VectorBase<OtherReal> &src) {
 // Instantiate the template above.
 template
 void CuVectorBase<float>::CopyFromVec(const VectorBase<float> &src);
-template
-void CuVectorBase<double>::CopyFromVec(const VectorBase<float> &src);
-template
-void CuVectorBase<float>::CopyFromVec(const VectorBase<double> &src);
+//template
+//void CuVectorBase<double>::CopyFromVec(const VectorBase<float> &src);
+//template
+//void CuVectorBase<float>::CopyFromVec(const VectorBase<double> &src);
 template
 void CuVectorBase<double>::CopyFromVec(const VectorBase<double> &src);
 
