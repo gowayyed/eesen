@@ -680,14 +680,14 @@ void CuVectorBase<Real>::CopyFromVec(const VectorBase<OtherReal> &src) {
   }
 }
 // Instantiate the template above.
-template
-void CuVectorBase<float>::CopyFromVec(const VectorBase<float> &src);
+//template
+//void CuVectorBase<float>::CopyFromVec(const VectorBase<float> &src);
 //template
 //void CuVectorBase<double>::CopyFromVec(const VectorBase<float> &src);
 //template
 //void CuVectorBase<float>::CopyFromVec(const VectorBase<double> &src);
-template
-void CuVectorBase<double>::CopyFromVec(const VectorBase<double> &src);
+//template
+//void CuVectorBase<double>::CopyFromVec(const VectorBase<double> &src);
 
 template<typename Real>
 template<typename OtherReal>
