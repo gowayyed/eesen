@@ -9,7 +9,7 @@ LDLIBS += $(CUDA_LDLIBS)
 
 TESTFILES = 
 
-OBJFILES = net.o layer.o ce-loss.o ctc-loss.o class-prior.o nnet-precondition.o nnet-precondition-online.o 
+OBJFILES = net.o layer.o ce-loss.o ctc-loss.o class-prior.o nnet-precondition.o
 
 LIBNAME = net
 

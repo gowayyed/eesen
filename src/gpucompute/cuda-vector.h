@@ -35,6 +35,12 @@ namespace eesen {
 
 template<typename Real> class CuMatrixBase;
 
+template<typename Real>
+Real VecVec(const CuVectorBase<Real> &v1, const CuVectorBase<Real> &v2);
+
+template<typename Real, typename OtherReal>
+Real VecVec(const CuVectorBase<Real> &v1, const CuVectorBase<OtherReal> &v2);
+
 /**
  * Vector for CUDA computing
  */
@@ -72,7 +78,6 @@ class CuVectorBase {
 
   template<typename OtherReal>
   void CopyFromVec(const VectorBase<OtherReal> &src);
-
 
 	
   /// Add the diagonal of a matrix times itself:
@@ -305,6 +310,7 @@ class CuSubVector: public CuVectorBase<Real> {
 /// I/O
 template<typename Real>
 std::ostream &operator << (std::ostream &out, const CuVectorBase<Real> &vec);
+
  
 template<typename Real>
 template<typename OtherReal>

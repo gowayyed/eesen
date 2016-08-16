@@ -5,7 +5,7 @@
 
 #include "base/timer.h"
 #include "gpucompute/cuda-common.h"
-#include "gpucompute/cuda-vector.cc"
+#include "gpucompute/cuda-vector.h"
 #include "gpucompute/cuda-device.h"
 #include "gpucompute/cuda-kernels.h"
 #include "gpucompute/cuda-math.h"

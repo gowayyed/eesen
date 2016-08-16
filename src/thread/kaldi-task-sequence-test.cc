@@ -69,7 +69,7 @@ void TestTaskSequencer() {
 }  // end namespace kaldi.
 
 int main() {
-  using namespace kaldi;
+  using namespace eesen;
   for (int32 i = 0; i < 1000; i++)
     TestTaskSequencer();
 }

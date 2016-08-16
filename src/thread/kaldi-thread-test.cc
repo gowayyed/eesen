@@ -102,7 +102,7 @@ void TestMutex() {
 }  // end namespace kaldi.
 
 int main() {
-  using namespace kaldi;
+  using namespace eesen;
   TestThreads();
   for (int i = 0; i < 20; i++)
     TestMutex();
